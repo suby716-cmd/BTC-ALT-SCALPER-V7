@@ -1,0 +1,17 @@
+name = "btc-alt-scalper-v7"
+main = "worker.js"
+compatibility_date = "2026-09-10"
+
+[vars]
+MIN_SCORE = "75"
+COOLDOWN_MINUTES = "20"
+
+# 5분봉 전략이므로 5분마다 자동 스캔 (필요하면 주기를 바꾸세요, 예: "*/1 * * * *")
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Optional persistent cooldown storage.
+# [[kv_namespaces]]
+# binding = "SCALPER_KV"
+# id = "YOUR_KV_NAMESPACE_ID"
+# preview_id = "YOUR_KV_PREVIEW_ID"
