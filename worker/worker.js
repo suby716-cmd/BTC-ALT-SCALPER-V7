@@ -1,5 +1,5 @@
 const COINS=['ETHUSDT','SOLUSDT','XRPUSDT','HBARUSDT','ONDOUSDT','LINKUSDT','AVAXUSDT','DOGEUSDT','SUIUSDT','TAOUSDT'];
-const BASE='https://api.binance.com/api/v3/klines';
+const BASE='https://data-api.binance.vision/api/v3/klines';
 export default{async fetch(req,env){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response('',{status:204,headers:cors()});if(req.method==='GET'&&u.pathname==='/health')return json({ok:true,version:'v7',engine:'numeric-self-validation'});if(req.method==='POST'&&u.pathname==='/test'){if(!auth(req,env))return json({ok:false,error:'unauthorized'},401);await sendTelegram(env,'🧪 BTC ALT SCALPER v7\nTelegram 연결 테스트 성공');return json({ok:true})}if(req.method==='POST'&&u.pathname==='/scan'){if(!auth(req,env))return json({ok:false,error:'unauthorized'},401);return json(await scanAll(env,false))}return json({ok:false,error:'not found'},404)},async scheduled(e,env,ctx){ctx.waitUntil(scanAll(env,false))}};
 function cors(){return{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'content-type,x-scalper-pin'}}
 function auth(r,e){return r.headers.get('x-scalper-pin')===e.SCALPER_PIN} function json(x,s=200){return new Response(JSON.stringify(x),{status:s,headers:{'content-type':'application/json',...cors()}})}
