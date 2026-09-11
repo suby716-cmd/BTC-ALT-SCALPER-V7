@@ -3,14 +3,22 @@ main = "worker.js"
 compatibility_date = "2026-09-10"
 
 [vars]
+# 실시간과 백테스트가 같은 기본값을 사용하도록 한 곳에서 관리합니다.
 MIN_SCORE = "75"
-COOLDOWN_MINUTES = "20"
+TP1_PERCENT = "1.2"
+TP2_PERCENT = "2.2"
+STOP_LOSS_PERCENT = "0.8"
+BUY_COOLDOWN_MINUTES = "20"
+SELL_COOLDOWN_MINUTES = "60"
+MAX_BUY_ALERTS = "2"
+CRON_DELAY_SECONDS = "12"
 
-# 5분봉 전략이므로 5분마다 자동 스캔 (필요하면 주기를 바꾸세요, 예: "*/1 * * * *")
+# PC/브라우저와 무관하게 Cloudflare가 5분마다 자동 실행합니다.
 [triggers]
 crons = ["*/5 * * * *"]
 
-# Optional persistent cooldown storage.
+# 24시간 자동 알림/중복 방지/보유 상태 저장에 KV가 필수입니다.
+# Cloudflare에서 KV namespace를 만든 뒤 실제 id로 바꾸고 주석을 해제하세요.
 # [[kv_namespaces]]
 # binding = "SCALPER_KV"
 # id = "YOUR_KV_NAMESPACE_ID"

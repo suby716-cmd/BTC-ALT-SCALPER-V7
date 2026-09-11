@@ -1,1 +1,8 @@
-{"name":"BTC ALT SCALPER v7","short_name":"ALT SCALPER v7","start_url":"./","display":"standalone","background_color":"#080c15","theme_color":"#080c15","icons":[]}
+{
+  "name": "BTC ALT SCALPER v8",
+  "short_name": "SCALPER v8",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#080c15",
+  "theme_color": "#0a0e17"
+}
