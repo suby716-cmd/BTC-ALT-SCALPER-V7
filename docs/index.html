@@ -4,7 +4,7 @@
 <div class="head"><div class="title"><h1>⚡ BTC ALT SCALPER v7</h1><div class="sub">멀티팩터 단타엔진 · 자기검증 · 기대값 · MDD · 워크포워드 · 조건 신뢰도</div></div><div class="status"><span class="dot" id="dot"></span><span id="status">연결 준비중</span></div></div>
 <div class="grid"><div class="card"><div class="label">BTC 가격</div><div class="value" id="btc">—</div></div><div class="card"><div class="label">BTC RSI 5m</div><div class="value" id="brsi">—</div></div><div class="card"><div class="label">BTC 5m</div><div class="value" id="bret">—</div></div><div class="card"><div class="label">시장 국면</div><div class="value" id="regime">—</div></div><div class="card"><div class="label">최고 Score</div><div class="value" id="top">—</div></div><div class="card"><div class="label">최고 신뢰도</div><div class="value" id="conf">—</div></div></div>
 <div class="panel"><div class="controls"><input id="worker" placeholder="Cloudflare Worker URL"><input id="pin" type="password" placeholder="Worker PIN"><button class="btn" id="save">설정 저장</button><button class="btn" id="scan">지금 스캔</button><button class="btn" id="test">Telegram 테스트</button></div><div class="small" style="margin-top:7px">Telegram Token/Chat ID는 Worker Secret에만 저장합니다. GitHub에는 비밀키를 넣지 않습니다.</div></div>
-<div class="hero"><div class="panel"><div class="signal" id="headline">최고 신호 대기중…</div><div class="reason" id="detail"></div><table><thead><tr><th>코인</th><th>Score</th><th>신뢰도</th><th>Risk</th><th>Signal</th><th>RSI</th><th>RSI-BTC</th><th>5m 상대</th><th>Vol</th><th>EMA9/20/50</th><th>돌파</th><th>보유</th></tr></thead><tbody id="rows"></tbody></table><div class="small" style="margin-top:8px">☑ 보유 = 사용자가 실제 매수한 코인만 직접 체크합니다. BUY 알림만으로는 보유 처리되지 않습니다. 보유 코인에서 하락 위험 조건이 발생하면 SELL 알림을 보냅니다.</div></div><div class="panel"><b>🧠 신호 품질 해석</b><div id="quality" class="log" style="margin-top:8px">실시간 스캔 후 표시됩니다.</div><div class="note" style="margin-top:9px">신뢰도는 AI가 예측한 확률이 아닙니다. 전략 내부 점수와 시장국면·모멘텀·변동성의 일관성을 수치화한 <b>연구용 품질지표</b>입니다.</div></div></div>
+<div class="hero"><div class="panel"><div class="signal" id="headline">최고 신호 대기중…</div><div class="reason" id="detail"></div><table><thead><tr><th>코인</th><th>Score</th><th>신뢰도</th><th>Risk</th><th>Signal</th><th>RSI</th><th>RSI-BTC</th><th>5m 상대</th><th>Vol</th><th>EMA9/20/50</th><th>돌파</th><th>보유</th></tr></thead><tbody id="rows"></tbody></table><div class="small" style="margin-top:8px">☑ 보유 = 사용자가 실제 매수한 코인만 직접 체크합니다(체크 시 실제 매수가 입력 가능). BUY 알림만으로는 보유 처리되지 않습니다. 보유 코인은 🎯TP1(+5%, 50% 익절 제안)·🎯TP2(+10%, 잔량 익절 제안)·🔴SELL 시그널(-5% 하락)·🟠하락반전 경계(4개 조건 중 3개 이상 동시 충족) 4가지 상황을 각각 1회씩 텔레그램으로 알려드립니다.</div></div><div class="panel"><b>🧠 신호 품질 해석</b><div id="quality" class="log" style="margin-top:8px">실시간 스캔 후 표시됩니다.</div><div class="note" style="margin-top:9px">신뢰도는 AI가 예측한 확률이 아닙니다. 전략 내부 점수와 시장국면·모멘텀·변동성의 일관성을 수치화한 <b>연구용 품질지표</b>입니다.</div></div></div>
 <div class="panel"><b>📊 V7 종합 백테스트</b><p class="small">시간순 재생 · 다음 봉 진입 · TP/SL · 수수료/슬리피지 · 코인별/Score별/시간대/국면별 분석 · 동시 포지션 중복 방지. 누적수익은 복리곡선과 거래당 기대값을 함께 계산합니다.</p><div class="btgrid"><select id="btCoin"><option value="ALL">ALL</option><option>ETHUSDT</option><option>SOLUSDT</option><option>XRPUSDT</option><option>HBARUSDT</option><option>ONDOUSDT</option><option>LINKUSDT</option><option>AVAXUSDT</option><option>DOGEUSDT</option><option>SUIUSDT</option><option>TAOUSDT</option></select><select id="btDays"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option></select><input id="btFee" type="number" step="0.01" value="0.10" placeholder="수수료 %"><input id="btSlip" type="number" step="0.01" value="0.03" placeholder="슬리피지 %"><input id="btTP" type="number" step="0.1" value="1.2" placeholder="TP %"><input id="btSL" type="number" step="0.1" value="0.8" placeholder="SL %"><input id="btThreshold" type="number" value="75" placeholder="Score threshold"><button class="btn" id="btRun">백테스트 실행</button></div><div id="btMetrics" class="metricgrid" style="margin-top:10px"></div><div id="btCoinStats" class="subpanel"></div><div id="btScoreStats" class="subpanel"></div><div id="btTimeStats" class="subpanel"></div><div id="btRegimeStats" class="subpanel"></div><div id="btRiskStats" class="subpanel"></div><div class="log" id="btLog" style="margin-top:10px">아직 실행하지 않았습니다.</div></div>
 <div class="panel"><b>🧪 자동 조건 탐색 + 안정성 점수</b><p class="small">여러 Threshold × TP × SL을 비교하고, 단순 누적수익률이 아니라 <b>기대값·Profit Factor·승률·MDD·거래수</b>를 함께 평가합니다. 거래수가 너무 적은 조합은 자동으로 낮게 평가합니다.</p><div class="controls"><button class="btn" id="optRun">최적 조건 탐색</button><button class="btn" id="wfRun">워크포워드 검증</button><button class="btn" id="stressRun">스트레스 테스트</button></div><div class="subpanel" id="optResult">결과 대기중</div><div class="subpanel" id="wfResult">워크포워드 결과 대기중</div><div class="subpanel" id="stressResult">스트레스 테스트 결과 대기중</div></div>
 <div class="panel"><b>🏆 V7 실전 후보 판정</b><div id="candidate" class="log" style="margin-top:8px">백테스트와 워크포워드가 완료되면 조건의 안정성을 판정합니다.</div><div class="small" style="margin-top:8px">권장 흐름: ① 30일 연구 → ② 워크포워드 → ③ 페이퍼 트레이딩 → ④ 소액 실전. 과거 성과가 미래 수익을 보장하지 않습니다.</div></div>
@@ -14,11 +14,43 @@ const COINS=['ETHUSDT','SOLUSDT','XRPUSDT','HBARUSDT','ONDOUSDT','LINKUSDT','AVA
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const W=$('worker'),P=$('pin');W.value=localStorage.getItem('v7_worker')||'';P.value=localStorage.getItem('v7_pin')||'';
 function money(x){return x==null?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:2})}function log(s){$('log').textContent=s}function pct(x){return (x>=0?'+':'')+Number(x).toFixed(2)+'%'}
-function render(d){const r=d.results||[],top=r.filter(x=>x.score!=null).sort((a,b)=>b.confidence-a.confidence||b.score-a.score)[0];$('btc').textContent=money(d.btcPrice);$('brsi').textContent=d.btcRsi==null?'—':Number(d.btcRsi).toFixed(1);$('bret').textContent=pct(d.btcRet5||0);if(top){$('top').textContent=top.score;$('conf').textContent=top.confidence;$('regime').textContent=top.regime;$('headline').innerHTML=`${top.signal==='BUY'?'🟢':top.signal==='WATCH'?'🟡':'⚪'} ${esc(top.symbol)} · Score ${top.score} · 신뢰도 ${top.confidence}`;$('detail').textContent=(top.reasons||[]).join(' · ');$('quality').innerHTML=`<b>${esc(top.signal)}</b> · ${esc(top.risk)} risk<br>BTC 국면: ${esc(top.regime)} · RSI 상대강도 ${top.rsiRel>=0?'+':''}${top.rsiRel}p · 상대모멘텀 ${pct(top.relRet5)}<br><span class="small">${(top.confidence>=82?'조건 일관성이 높은 편입니다.':top.confidence>=70?'관찰 가치가 있습니다.':'신호가 약하거나 불확실합니다.')}</span>`}$('rows').innerHTML=r.map(x=>`<tr><td>${esc(x.symbol)}</td><td>${x.score??'—'}</td><td>${x.confidence??'—'}</td><td>${esc(x.risk||'—')}</td><td class="${x.sell?'error':String(x.signal).toLowerCase()}">${x.sell?'SELL':esc(x.signal)}</td><td>${x.rsi??'—'}</td><td>${x.rsiRel>=0?'+':''}${x.rsiRel??'—'}</td><td>${x.relRet5>=0?'+':''}${x.relRet5??'—'}%</td><td>${x.volRatio??'—'}x</td><td>${x.ema9??'—'} / ${x.ema20??'—'} / ${x.ema50??'—'}</td><td>${x.breakout?'✓':'—'}</td><td><input type="checkbox" ${(d.held||[]).includes(x.symbol)?'checked':''} onchange="togglePos('${x.symbol}',this.checked,${x.price??'null'})"></td></tr>`).join('');$('status').textContent='실시간 데이터 수신';$('dot').style.background='var(--green)'}
+function render(d){
+  let localHeld=JSON.parse(localStorage.getItem('v7_local_held')||'[]');
+  if(!d.held)d.held=[];
+  d.held=Array.from(new Set([...d.held,...localHeld]));
+  const r=d.results||[],top=r.filter(x=>x.score!=null).sort((a,b)=>b.confidence-a.confidence||b.score-a.score)[0];
+  $('btc').textContent=money(d.btcPrice);$('brsi').textContent=d.btcRsi==null?'—':Number(d.btcRsi).toFixed(1);$('bret').textContent=pct(d.btcRet5||0);
+  if(top){$('top').textContent=top.score;$('conf').textContent=top.confidence;$('regime').textContent=top.regime;$('headline').innerHTML=`${top.signal==='BUY'?'🟢':top.signal==='WATCH'?'🟡':'⚪'} ${esc(top.symbol)} · Score ${top.score} · 신뢰도 ${top.confidence}`;$('detail').textContent=(top.reasons||[]).join(' · ');$('quality').innerHTML=`<b>${esc(top.signal)}</b> · ${esc(top.risk)} risk<br>BTC 국면: ${esc(top.regime)} · RSI 상대강도 ${top.rsiRel>=0?'+':''}${top.rsiRel}p · 상대모멘텀 ${pct(top.relRet5)}<br><span class="small">${(top.confidence>=82?'조건 일관성이 높은 편입니다.':top.confidence>=70?'관찰 가치가 있습니다.':'신호가 약하거나 불확실합니다.')}</span>`}
+  $('rows').innerHTML=r.map(x=>`<tr><td>${esc(x.symbol)}</td><td>${x.score??'—'}</td><td>${x.confidence??'—'}</td><td>${esc(x.risk||'—')}</td><td class="${x.sell?'error':String(x.signal).toLowerCase()}">${x.sell?'SELL':esc(x.signal)}</td><td>${x.rsi??'—'}</td><td>${x.rsiRel>=0?'+':''}${x.rsiRel??'—'}</td><td>${x.relRet5>=0?'+':''}${x.relRet5??'—'}%</td><td>${x.volRatio??'—'}x</td><td>${x.ema9??'—'} / ${x.ema20??'—'} / ${x.ema50??'—'}</td><td>${x.breakout?'✓':'—'}</td><td><input type="checkbox" ${(d.held||[]).includes(x.symbol)?'checked':''} onchange="togglePos('${x.symbol}',this.checked,${x.price??'null'})"></td></tr>`).join('');
+  $('status').textContent='실시간 데이터 수신';$('dot').style.background='var(--green)';
+}
 async function call(path,body){const w=W.value.trim();if(!w)throw Error('Worker URL을 입력하세요.');const r=await fetch(w.replace(/\/$/,'')+path,{method:'POST',headers:Object.assign({'x-scalper-pin':P.value.trim()},body?{'content-type':'application/json'}:{}),body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.error||'요청 실패');return d}
-async function togglePos(sym,checked,price){try{const d=await call('/position',{symbol:sym,action:checked?'add':'remove',entry:checked?price:undefined});log((checked?'보유 등록: ':'보유 해제: ')+sym+' · 저장 완료');if(d.held)log((checked?'☑ ':'☐ ')+sym+' 보유 상태가 서버에 저장되었습니다.')}catch(e){log('오류: '+e.message)}}
+async function togglePos(sym,checked,price){
+  let heldList=JSON.parse(localStorage.getItem('v7_local_held')||'[]');
+  let entryPrice=price;
+  if(checked){
+    if(!heldList.includes(sym))heldList.push(sym);
+    const input=window.prompt(`${sym} 실제 매수가를 입력하세요.\n(모르거나 빈 칸이면 현재가 ${price??'—'}로 기록됩니다)`,'');
+    if(input&&!isNaN(parseFloat(input)))entryPrice=parseFloat(input);
+  }else{
+    heldList=heldList.filter(s=>s!==sym);
+  }
+  localStorage.setItem('v7_local_held',JSON.stringify(heldList));
+  try{
+    const w=W.value.trim();
+    if(w){
+      await call('/position',{symbol:sym,action:checked?'add':'remove',entry:checked?entryPrice:undefined});
+      log((checked?'보유 등록: ':'보유 해제: ')+sym+(checked?` · 매수가 ${entryPrice}`:'')+' · 서버 저장 완료');
+    }else{
+      log((checked?'보유 등록: ':'보유 해제: ')+sym+' · 로컬 저장 완료');
+    }
+  }catch(e){log('서버 저장 실패 (로컬 유지됨): '+e.message)}
+}
 window.togglePos=togglePos;
-$('save').onclick=()=>{localStorage.setItem('v7_worker',W.value.trim());localStorage.setItem('v7_pin',P.value.trim());log('v7 설정 저장 완료')};$('scan').onclick=async()=>{try{log('실시간 스캔 중…');const d=await call('/scan');render(d);log('완료 · Telegram: '+((d.sent||[]).join(', ')||'없음'))}catch(e){log('오류: '+e.message)}};$('test').onclick=async()=>{try{await call('/test');log('Telegram 테스트 전송 완료')}catch(e){log('오류: '+e.message)}};setInterval(()=>{if(W.value.trim())$('scan').click()},60000);
+$('save').onclick=()=>{localStorage.setItem('v7_worker',W.value.trim());localStorage.setItem('v7_pin',P.value.trim());log('v7 설정 저장 완료')};
+$('scan').onclick=async()=>{try{log('실시간 스캔 중…');const d=await call('/scan');render(d);log('완료 · Telegram: '+((d.sent||[]).join(', ')||'없음'))}catch(e){log('오류: '+e.message)}};
+$('test').onclick=async()=>{try{await call('/test');log('Telegram 테스트 전송 완료')}catch(e){log('오류: '+e.message)}};
+setInterval(()=>{if(W.value.trim())$('scan').click()},60000);
 async function fetchK(symbol,limit=1000,endTime=null){let u=`${BT}?symbol=${symbol}&interval=5m&limit=${limit}`+(endTime?`&endTime=${endTime}`:'');const r=await fetch(u);if(!r.ok)throw Error(symbol+' Binance '+r.status);return r.json()}
 async function history(symbol,days){const need=Math.min(6000,Math.ceil(days*288)+220);let out=[],end=null;while(out.length<need){const a=await fetchK(symbol,Math.min(1000,need-out.length),end);if(!a.length)break;out=a.concat(out);if(a.length<1000)break;end=a[0][0]-1}return out.slice(-need)}
 function EMA(a,n){if(!a.length)return 0;let e=a[0],m=2/(n+1);for(let i=1;i<a.length;i++)e=a[i]*m+e*(1-m);return e}function RSI(a,n=14){if(a.length<n+1)return 50;let g=0,l=0;for(let i=1;i<=n;i++){let d=a[i]-a[i-1];if(d>=0)g+=d;else l-=d}let ag=g/n,al=l/n;for(let i=n+1;i<a.length;i++){let d=a[i]-a[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?-d:0))/n}return al===0?100:100-100/(1+ag/al)}
@@ -38,52 +70,6 @@ $('optRun').onclick=async()=>{try{const c=$('btCoin').value==='ALL'?'ETHUSDT':$(
 $('wfRun').onclick=async()=>{try{const c=$('btCoin').value==='ALL'?'ETHUSDT':$('btCoin').value,d=Math.max(21,+$('btDays').value),f=+$('btFee').value,si=+$('btSlip').value;const[k,b]=await Promise.all([history(c,d),history('BTCUSDT',d)]),split=Math.floor(k.length*.65),ka=k.slice(0,split),kb=k.slice(Math.max(0,split-180)),ba=b.slice(0,split),bb=b.slice(Math.max(0,split-180));let best=null;for(const th of [65,70,75,80,85]){const z=await backtestArrays(ka,ba,f,si,1.2,.8,th),q=stats(z);if(q.n>=3&&(!best||quality(q)>quality(best.q)))best={th,q}}if(!best){$('wfResult').textContent='학습구간 신호 부족';return}const test=stats(await backtestArrays(kb,bb,f,si,1.2,.8,best.th));$('wfResult').innerHTML=`학습 최적 Threshold <b>${best.th}</b> → 미래 검증에 고정 적용<br>검증 거래 ${test.n} · 승률 ${test.win.toFixed(1)}% · 기대값 ${test.avg.toFixed(3)}% · 복리 ${test.net.toFixed(2)}% · PF ${test.pf===Infinity?'∞':test.pf.toFixed(2)} · MDD ${test.mdd.toFixed(2)}%<br><b>${judge(test,test)}</b>`;$('candidate').textContent=judge(test,test)}catch(e){$('wfResult').textContent='워크포워드 오류: '+e.message}};
 async function backtestArrays(k,b,fee,slip,tp,sl,th){const bm=new Map(b.map(x=>[x[0],x])),a=k.filter(x=>bm.has(x[0]));let trades=[],last=-1;for(let i=150;i<a.length-2;i++){if(i<=last)continue;const bs=a.slice(0,i+1),bb=bs.map(x=>bm.get(x[0])).filter(Boolean),z=calcScore(bs,bb,th);if(!z.buy)continue;const entry=+a[i+1][1]*(1+slip/100),T=entry*(1+tp/100),S=entry*(1-sl/100);let ex=null,reason='HORIZON',ej=Math.min(a.length-1,i+72);for(let j=i+1;j<Math.min(a.length,i+73);j++){if(+a[j][3]<=S){ex=S;reason='SL';ej=j;break}if(+a[j][2]>=T){ex=T;reason='TP';ej=j;break}}if(ex==null)ex=+a[ej][4];last=ej;trades.push({net:(ex/entry-1)*100-fee*2,score:z.score,regime:z.regime,time:z.time,reason})}return trades}
 $('stressRun').onclick=async()=>{try{const c=$('btCoin').value==='ALL'?'ETHUSDT':$('btCoin').value,d=+$('btDays').value,f=+$('btFee').value,si=+$('btSlip').value,tp=+$('btTP').value,sl=+$('btSL').value,th=+$('btThreshold').value;const base=stats((await backtestOne(c,d,f,si,tp,sl,th)).trades),worse=stats((await backtestOne(c,d,f+.05,si+.05,tp,sl,th)).trades),hard=stats((await backtestOne(c,d,f+.10,si+.10,tp-.2,sl+.2,th)).trades);$('stressResult').innerHTML=`기준: 기대값 ${base.avg.toFixed(3)}% · 복리 ${base.net.toFixed(2)}% · MDD ${base.mdd.toFixed(2)}%<br>비용 +0.05%p: 기대값 ${worse.avg.toFixed(3)}% · 복리 ${worse.net.toFixed(2)}% · MDD ${worse.mdd.toFixed(2)}%<br>불리한 가정: 비용 +0.10%p, TP -0.2%p, SL +0.2%p → 기대값 ${hard.avg.toFixed(3)}% · 복리 ${hard.net.toFixed(2)}% · MDD ${hard.mdd.toFixed(2)}%<br><span class="small">불리한 조건에서도 기대값이 양수인지 확인하세요.</span>`}catch(e){$('stressResult').textContent='스트레스 테스트 오류: '+e.message}};
-</script></body><script>
-window.addEventListener('DOMContentLoaded', () => {
-    // 1. 렌더링 함수에 로컬 저장소 동기화 기능 패치
-    if (typeof render === 'function' && !window._renderPatched) {
-        window._renderPatched = true;
-        const origRender = render;
-        window.render = function(d) {
-            let localHeld = JSON.parse(localStorage.getItem('v7_local_held') || '[]');
-            if (!d.held) d.held = [];
-            d.held = Array.from(new Set([...d.held, ...localHeld]));
-            origRender(d);
-        };
-    }
-
-    // 2. togglePos 함수에 로컬 저장 기능 추가
-    if (typeof togglePos === 'function' && !window._togglePatched) {
-        window._togglePatched = true;
-        window.togglePos = async function(sym, checked, price) {
-            let heldList = JSON.parse(localStorage.getItem('v7_local_held') || '[]');
-            if (checked) {
-                if (!heldList.includes(sym)) heldList.push(sym);
-            } else {
-                heldList = heldList.filter(s => s !== sym);
-            }
-            localStorage.setItem('v7_local_held', JSON.stringify(heldList));
-
-            // 화면 즉시 반영을 위해 재렌더링 트리거 시도
-            try {
-                const w = W.value.trim();
-                if (w) {
-                    await call('/position', { symbol: sym, action: checked ? 'add' : 'remove', entry: checked ? price : undefined });
-                    log((checked ? '보유 등록: ' : '보유 해제: ') + sym + ' · 서버 저장 완료');
-                } else {
-                    log((checked ? '보유 등록: ' : '보유 해제: ') + sym + ' · 로컬 저장 완료');
-                }
-            } catch (e) {
-                log('서버 저장 실패 (로컬 유지됨): ' + e.message);
-            }
-        };
-    }
-
-    // 3. 페이지 로드 시 자동 스캔 및 데이터 동기화
-    if (W.value.trim()) {
-        log('서버에서 최신 데이터 및 보유 상태 동기화 중…');
-        $('scan').click();
-    }
-});
+if(W.value.trim()){log('서버에서 최신 데이터 및 보유 상태 동기화 중…');$('scan').click()}
 </script>
-</html>
+</body></html>
