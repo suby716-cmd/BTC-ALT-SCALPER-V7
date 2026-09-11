@@ -2,7 +2,6 @@ const COINS=['ETHUSDT','SOLUSDT','XRPUSDT','HBARUSDT','ONDOUSDT','LINKUSDT','AVA
 const BASE='https://api.upbit.com/v1/candles/minutes';
 const POS_KEY='positions';
 const BUY_COOLDOWN_MIN=20;
-const SELL_COOLDOWN_MIN=60;
 
 function toMarket(symbol){return 'KRW-'+symbol.replace('USDT','')}
 
@@ -10,10 +9,10 @@ export default{
   async fetch(req,env){
     const u=new URL(req.url);
     if(req.method==='OPTIONS')return new Response('',{status:204,headers:cors()});
-    if(req.method==='GET'&&u.pathname==='/health')return json({ok:true,version:'v7.1',engine:'numeric-self-validation',kv:!!env.SCALPER_KV});
+    if(req.method==='GET'&&u.pathname==='/health')return json({ok:true,version:'v7.2',engine:'numeric-self-validation',kv:!!env.SCALPER_KV});
     if(req.method==='POST'&&u.pathname==='/test'){
       if(!auth(req,env))return json({ok:false,error:'unauthorized'},401);
-      await sendTelegram(env,'🧪 BTC ALT SCALPER v7.1\nTelegram 연결 테스트 성공');
+      await sendTelegram(env,'🧪 BTC ALT SCALPER v7.2\nTelegram 연결 테스트 성공');
       return json({ok:true});
     }
     if(req.method==='POST'&&u.pathname==='/position'){
@@ -87,20 +86,7 @@ async function calc(symbol,b5,b15){
   const signal=hard?'BUY':(score>=60&&!crash?'WATCH':'IDLE');
   const confidence=clamp(score*.72+(regime==='RISK_ON'?10:-8)+(r15>br15?6:0)+(breakout?4:0)-(atrPct<.25?8:0)-(r>76?12:0),0,100);
   const risk=crash||regime==='RISK_OFF'||r>76?'HIGH':confidence>=82?'LOW':'MEDIUM';
-  return{symbol,price,btcPrice:bp.at(-1),score:rnd(score),confidence:rnd(confidence),risk,signal,rsi:rnd(r),btcRsi:rnd(br),rsiRel:rnd(relR),rsi15:rnd(r15),btcRsi15:rnd(br15),ret5:rnd(ret),btcRet5:rnd(bret),relRet5:rnd(relRet),ema9:rnd(e9),ema20:rnd(e20),ema50:rnd(e50),volRatio:rnd(vr),breakout,atrPct:rnd(atrPct,3),regime,btcCrash:crash,tp1:price*1.012,tp2:price*1.022,sl:price*.992,reasons:reasons.slice(0,5)}
-}
-
-function sellCheck(s,pos){
-  const entry=Number(pos?.entry)||0, gain=entry?((s.price/entry)-1)*100:0;
-  const reasons=[];
-  if(entry&&s.price<=entry*.992)reasons.push('손절선 -0.8% 도달');
-  if(s.btcCrash)reasons.push('BTC 급락/약세');
-  if(s.regime==='RISK_OFF')reasons.push('BTC 시장국면 Risk-Off');
-  if(s.ema9<s.ema20&&s.relRet5<0)reasons.push('단기 추세·상대모멘텀 동시 약화');
-  if(s.score<48&&s.ema9<s.ema20)reasons.push('종합점수 하락 + EMA 약세');
-  if(entry&&gain>=1&&s.score<55&&s.ema9<s.ema20)reasons.push('수익 보호: 상승 후 추세 이탈');
-  const sell=!!reasons.length;
-  return{sell,gain:rnd(gain),reasons};
+  return{symbol,price,btcPrice:bp.at(-1),score:rnd(score),confidence:rnd(confidence),risk,signal,rsi:rnd(r),btcRsi:rnd(br),rsiRel:rnd(relR),rsi15:rnd(r15),btcRsi15:rnd(br15),ret5:rnd(ret),btcRet5:rnd(bret),relRet5:rnd(relRet),ema9:rnd(e9),ema20:rnd(e20),ema50:rnd(e50),volRatio:rnd(vr),breakout,atrPct:rnd(atrPct,3),regime,btcCrash:crash,tp1:price*1.05,tp2:price*1.10,sl:price*.95,reasons:reasons.slice(0,5)}
 }
 
 async function getPositions(env){
@@ -115,14 +101,29 @@ async function scanAll(env,force=false){
   for(const c of COINS){try{results.push(await calc(c,b5,b15))}catch(e){results.push({symbol:c,signal:'ERROR',error:e.message})}await sleep(250)}
   const positions=env.SCALPER_KV?await getPositions(env):{};
   const held=Object.keys(positions);
-  const sellSignals=[];
+const events=[];let positionsChanged=false;
   for(const s of results){
-    if(positions[s.symbol]){
-      const q=sellCheck(s,positions[s.symbol]);
-      s.held=true;s.entry=positions[s.symbol].entry;s.gain=q.gain;s.sell=q.sell;s.sellReasons=q.reasons;
-      if(q.sell)sellSignals.push(s);
-    }else{s.held=false;s.sell=false;s.sellReasons=[]}
+    const pos=positions[s.symbol];
+    if(!pos){s.held=false;s.sell=false;s.sellReasons=[];continue}
+    s.held=true;
+    const entry=Number(pos.entry)||0,gain=entry?((s.price/entry)-1)*100:0;
+    s.entry=entry||null;s.gain=rnd(gain);
+    if(entry&&!pos.notifiedSL&&s.price<=entry*.95){events.push({symbol:s.symbol,type:'SL',s,entry,gain:rnd(gain)});pos.notifiedSL=true;positionsChanged=true}
+    if(entry&&!pos.notifiedTP2&&s.price>=entry*1.10){events.push({symbol:s.symbol,type:'TP2',s,entry,gain:rnd(gain)});pos.notifiedTP2=true;pos.notifiedTP1=true;positionsChanged=true}
+    else if(entry&&!pos.notifiedTP1&&s.price>=entry*1.05){events.push({symbol:s.symbol,type:'TP1',s,entry,gain:rnd(gain)});pos.notifiedTP1=true;positionsChanged=true}
+    const reasons=[];
+    if(s.regime==='RISK_OFF')reasons.push('BTC 시장국면 Risk-Off');
+    if(s.ema9<s.ema20)reasons.push('단기 추세 하락 전환');
+    if(s.relRet5<0)reasons.push('BTC 대비 상대모멘텀 약화');
+    if(s.score<48)reasons.push('종합 Score 약세(<48)');
+    if(s.btcCrash)reasons.push('BTC 급락/약세 감지');
+    const bearishCount=[s.regime==='RISK_OFF',s.ema9<s.ema20,s.relRet5<0,s.score<48].filter(Boolean).length;
+    const reversal=bearishCount>=3||s.btcCrash;
+    s.sell=reversal;s.sellReasons=reasons;
+    if(reversal&&!pos.reversalActive){events.push({symbol:s.symbol,type:'SELL',s,entry,gain:rnd(gain),reasons});pos.reversalActive=true;positionsChanged=true}
+    else if(!reversal&&pos.reversalActive){pos.reversalActive=false;positionsChanged=true}
   }
+  if(positionsChanged&&env.SCALPER_KV)await env.SCALPER_KV.put(POS_KEY,JSON.stringify(positions));
 
   const buys=results.filter(x=>x.signal==='BUY'&&!x.held).sort((a,b)=>b.confidence-a.confidence||b.score-a.score),sent=[],sold=[];
   const now=Date.now(),cool=Number(env.COOLDOWN_MINUTES||BUY_COOLDOWN_MIN)*60000;
@@ -133,18 +134,17 @@ async function scanAll(env,force=false){
     if(env.SCALPER_KV)await env.SCALPER_KV.put(key,String(now),{expirationTtl:Math.max(3600,Math.floor(cool/1000))});
   }
 
-  const sellCool=Number(env.SELL_COOLDOWN_MINUTES||SELL_COOLDOWN_MIN)*60000;
-  for(const s of sellSignals){
-    const key=`last:sell:${s.symbol}`,last=env.SCALPER_KV?await env.SCALPER_KV.get(key):null;
-    if(!force&&last&&now-Number(last)<sellCool)continue;
-    await sendTelegram(env,formatSell(s));sold.push(s.symbol);
-    if(env.SCALPER_KV)await env.SCALPER_KV.put(key,String(now),{expirationTtl:Math.max(3600,Math.floor(sellCool/1000))});
+  for(const ev of events){
+    const msg=ev.type==='SL'?formatSL(ev):ev.type==='TP1'?formatTP(ev,1):ev.type==='TP2'?formatTP(ev,2):formatSell(ev);
+    await sendTelegram(env,msg);sold.push(`${ev.symbol}(${ev.type})`);
   }
-  return{ok:true,version:'v7.1',btcPrice:+b5.at(-1)?.[4]||null,btcRsi:RSI(cls(b5)),btcRet5:pct(+b5.at(-1)?.[4],+b5.at(-2)?.[4]),held,sent,sold,sellSignals:sellSignals.map(x=>x.symbol),top:results.filter(x=>x.score!=null).sort((a,b)=>b.confidence-a.confidence||b.score-a.score).slice(0,5),results};
+  return{ok:true,version:'v7.2',btcPrice:+b5.at(-1)?.[4]||null,btcRsi:RSI(cls(b5)),btcRet5:pct(+b5.at(-1)?.[4],+b5.at(-2)?.[4]),held,sent,sold,top:results.filter(x=>x.score!=null).sort((a,b)=>b.confidence-a.confidence||b.score-a.score).slice(0,5),results};
 }
 
-function format(s){return `🟢 BUY SIGNAL v7\n\n${s.symbol.replace('USDT','/USDT')}\n가격: ${fmt(s.price)}\nScore: ${s.score}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel>=0?'+':''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5>=0?'+':''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA: ${s.ema9} > ${s.ema20} > ${s.ema50}\n\n🎯 TP1 +1.2%: ${fmt(s.tp1)}\n🎯 TP2 +2.2%: ${fmt(s.tp2)}\n🛑 SL -0.8%: ${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n⚠️ 수동매매 신호. 체결 전 호가/뉴스/변동성을 확인하세요.`}
-function formatSell(s){return `🔴 SELL SIGNAL v7\n\n${s.symbol.replace('USDT','/USDT')}\n현재가: ${fmt(s.price)}\n진입가(기록): ${fmt(s.entry)}\n현재 손익: ${s.gain>=0?'+':''}${s.gain}%\nScore: ${s.score}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA: ${s.ema9} / ${s.ema20} / ${s.ema50}\n\n🚨 매도 검토 신호\n${s.sellReasons.map(x=>'• '+x).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다. 호가/뉴스/시장상황을 확인하세요.`}
+function format(s){return `🟢 BUY SIGNAL v7\n\n${s.symbol.replace('USDT','/USDT')}\n가격: ${fmt(s.price)}\nScore: ${s.score}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel>=0?'+':''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5>=0?'+':''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA: ${s.ema9} > ${s.ema20} > ${s.ema50}\n\n🎯 TP1 +5%: ${fmt(s.tp1)} (매수 시 참고용 목표가)\n🎯 TP2 +10%: ${fmt(s.tp2)}\n🛑 참고 손절선 -5%: ${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n⚠️ 수동매매 신호. 체결 전 호가/뉴스/변동성을 확인하세요. 실제 매수하시면 화면에서 '보유' 체크를 해주셔야 이후 TP/SL/SELL 알림을 받습니다.`}
+function formatSL(ev){return `🔴 SELL 시그널 v7 (-5% 하락)\n\n${ev.symbol.replace('USDT','/USDT')}\n현재가: ${fmt(ev.s.price)}\n매수가(기록): ${fmt(ev.entry)}\n손익: ${ev.gain>=0?'+':''}${ev.gain}%\n\n⚠️ 매수가 대비 -5% 하락했습니다. 매도 여부를 검토하세요.\n(이 알림은 이번 보유 동안 1회만 발송됩니다.)`}
+function formatTP(ev,tier){const label=tier===1?'+5%':'+10%';const advice=tier===1?'보유 수량의 절반(50%) 정도 익절을 고려해보세요. 나머지는 추세를 좀 더 지켜볼 수 있습니다.':'남은 물량의 익절도 고려해보세요. 계속 보유하신다면 손절선을 매수가 부근으로 올려 이익을 보호하는 것도 방법입니다.';return `🎯 TP${tier} 도달 v7 (${label})\n\n${ev.symbol.replace('USDT','/USDT')}\n현재가: ${fmt(ev.s.price)}\n매수가(기록): ${fmt(ev.entry)}\n손익: +${ev.gain}%\n\n💡 ${advice}\n(이 알림은 이번 보유 동안 1회만 발송됩니다.)`}
+function formatSell(ev){return `🟠 하락반전 경계 v7\n\n${ev.symbol.replace('USDT','/USDT')}\n현재가: ${fmt(ev.s.price)}\n매수가(기록): ${ev.entry?fmt(ev.entry):'—'}\n손익: ${ev.entry?(ev.gain>=0?'+':'')+ev.gain+'%':'—'}\nScore: ${ev.s.score}/100 · 위험: ${ev.s.risk}\n\n근거(아래 중 3개 이상 동시 충족 또는 BTC 급락):\n${ev.reasons.map(x=>'• '+x).join('\n')}\n\n⚠️ 아직 -5% 손절선은 아니지만, 추세가 약해지는 조기 경고입니다. 매도 여부를 직접 판단하세요.\n(상태가 계속 유지되는 동안은 반복 발송되지 않고, 조건이 풀렸다가 다시 발생하면 재발송됩니다.)`}
 function fmt(x){return x>=1000?x.toLocaleString('en-US',{maximumFractionDigits:2}):x>=1?x.toFixed(4):x.toFixed(6)}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function sendTelegram(env,text){const r=await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:env.TELEGRAM_CHAT_ID,text})});if(!r.ok)throw Error(`Telegram ${r.status}`)}
