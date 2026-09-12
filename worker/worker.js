@@ -1,5 +1,5 @@
-const VERSION = 'v8.1.3';
-const STRATEGY_VERSION = 'krw-5m-v8.1.3-public-macro';
+const VERSION = 'v8.1.4';
+const STRATEGY_VERSION = 'krw-5m-v8.1.4-stable-public-macro';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
@@ -33,6 +33,10 @@ const MACRO_PROVIDER_STALE_MS = {
   cboe: 5 * 24 * 60 * 60 * 1000,
   bls: 45 * 24 * 60 * 60 * 1000,
   eia: 7 * 24 * 60 * 60 * 1000
+};
+const MACRO_PROVIDER_MIN_REFRESH_MS = {
+  // BLS CPI/실업률은 월간 데이터입니다. 5분 Cron마다 호출하지 않고 하루 최대 2회만 갱신합니다.
+  bls: 12 * 60 * 60 * 1000
 };
 const FIVE_MIN = 5 * 60 * 1000;
 const FIFTEEN_MIN = 15 * 60 * 1000;
@@ -723,7 +727,7 @@ function parseTreasuryYieldXml(xml) {
 async function fetchTreasuryProvider(asOf = Date.now()) {
   const year = new Date(asOf).getUTCFullYear();
   const q = new URLSearchParams({ data:'daily_treasury_yield_curve', field_tdr_date_value:String(year) });
-  const r = await fetchWithTimeout(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?${q.toString()}`, { headers:{ accept:'application/xml,text/xml;q=0.9,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  const r = await fetchWithTimeout(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?${q.toString()}`, { headers:{ accept:'application/xml,text/xml;q=0.9,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.4' } });
   if (!r.ok) throw new Error(`Treasury ${r.status}`);
   return parseTreasuryYieldXml(await r.text());
 }
@@ -742,32 +746,51 @@ function parseFedHistoricalRateHtml(html) {
 }
 
 async function fetchFederalReserveSeries(id, url) {
-  const r = await fetchWithTimeout(url, { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  const r = await fetchWithTimeout(url, { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.4' } });
   if (!r.ok) throw new Error(`${id} ${r.status}`);
   return { [id]:parseFedHistoricalRateHtml(await r.text()) };
 }
 
-function parseCboeCsv(text) {
-  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+function parseCboeCsv(text, id = '') {
+  const lines = String(text || '').replace(/^\uFEFF/, '').trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 3) throw new Error('Cboe CSV 데이터 부족');
-  const head = lines[0].split(',').map(x => x.trim().replace(/^"|"$/g,'').toUpperCase());
-  const dateIdx = head.indexOf('DATE');
-  const closeIdx = head.indexOf('CLOSE');
-  if (dateIdx < 0 || closeIdx < 0) throw new Error('Cboe CSV 형식 변경');
+  const split = line => line.split(',').map(x => x.trim().replace(/^"|"$/g,''));
+  const head = split(lines[0]).map(x => x.toUpperCase().replace(/[\s.-]+/g,'_'));
+  let dateIdx = head.findIndex(x => x === 'DATE' || x === 'TRADE_DATE' || x.endsWith('_DATE'));
+  if (dateIdx < 0) dateIdx = 0;
+
+  const sym = String(id || '').toUpperCase();
+  const preferred = ['CLOSE', `${sym}_CLOSE`, sym, 'VALUE', 'LAST', 'LAST_PRICE', 'INDEX_VALUE'];
+  let valueIdx = preferred.map(x => head.indexOf(x)).find(i => i >= 0 && i !== dateIdx);
+
+  // OVX처럼 DATE,OVX 두 열 또는 형식이 바뀐 공개 CSV도 수용합니다.
+  if (valueIdx == null || valueIdx < 0) {
+    const sampleRows = lines.slice(1, Math.min(lines.length, 8)).map(split);
+    let best = -1, bestHits = -1;
+    for (let i = 0; i < head.length; i++) {
+      if (i === dateIdx) continue;
+      const hits = sampleRows.reduce((n,row) => n + (Number.isFinite(Number(String(row[i] ?? '').replace(/,/g,''))) ? 1 : 0), 0);
+      if (hits > bestHits) { bestHits = hits; best = i; }
+    }
+    valueIdx = best;
+  }
+  if (valueIdx == null || valueIdx < 0) throw new Error(`Cboe CSV 형식 변경 (${sym || 'INDEX'})`);
+
   const out = [];
   for (const line of lines.slice(1)) {
-    const parts = line.split(',').map(x => x.trim().replace(/^"|"$/g,''));
-    const v = Number(parts[closeIdx]);
-    if (parts[dateIdx] && Number.isFinite(v)) out.push({ date:parts[dateIdx], value:v });
+    const parts = split(line);
+    const raw = String(parts[valueIdx] ?? '').replace(/,/g,'');
+    const v = Number(raw);
+    const date = parts[dateIdx];
+    if (date && Number.isFinite(v)) out.push({ date, value:v });
   }
-  if (out.length < 5) throw new Error('Cboe CSV 유효 데이터 부족');
+  if (out.length < 5) throw new Error(`Cboe CSV 유효 데이터 부족 (${sym || 'INDEX'})`);
   return out.slice(-45);
 }
-
 async function fetchCboeSeries(id, url) {
-  const r = await fetchWithTimeout(url, { headers:{ accept:'text/csv,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  const r = await fetchWithTimeout(url, { headers:{ accept:'text/csv,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.4' } });
   if (!r.ok) throw new Error(`${id} ${r.status}`);
-  return { [id]:parseCboeCsv(await r.text()) };
+  return { [id]:parseCboeCsv(await r.text(), id) };
 }
 
 function parseBlsSeries(data) {
@@ -790,7 +813,7 @@ async function fetchBlsProvider(asOf = Date.now()) {
   const year = new Date(asOf).getUTCFullYear();
   const body = { seriesid:['CUSR0000SA0','LNS14000000'], startyear:String(year-2), endyear:String(year) };
   const r = await fetchWithTimeout('https://api.bls.gov/publicAPI/v1/timeseries/data/', {
-    method:'POST', headers:{ 'content-type':'application/json', accept:'application/json', 'user-agent':'BTC-ALT-SCALPER/8.1.3' }, body:JSON.stringify(body)
+    method:'POST', headers:{ 'content-type':'application/json', accept:'application/json', 'user-agent':'BTC-ALT-SCALPER/8.1.4' }, body:JSON.stringify(body)
   });
   if (!r.ok) throw new Error(`BLS ${r.status}`);
   const d = await r.json();
@@ -818,7 +841,7 @@ function parseEiaWtiHtml(html) {
 }
 
 async function fetchEiaProvider() {
-  const r = await fetchWithTimeout('https://www.eia.gov/dnav/pet/hist/RWTCD.htm', { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  const r = await fetchWithTimeout('https://www.eia.gov/dnav/pet/hist/RWTCD.htm', { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.4' } });
   if (!r.ok) throw new Error(`EIA WTI ${r.status}`);
   return { WTI:parseEiaWtiHtml(await r.text()) };
 }
@@ -845,8 +868,12 @@ function usableProviderCache(entry, maxStaleMs) {
   return { metrics:entry.metrics, fetchedAt:Number(entry.fetchedAt), ageMs };
 }
 
-async function loadMacroProvider(name, label, fetcher, maxStaleMs, cacheEntry, asOf) {
+async function loadMacroProvider(name, label, fetcher, maxStaleMs, cacheEntry, asOf, minRefreshMs = 0) {
   const errors = [];
+  const preCached = usableProviderCache(cacheEntry, maxStaleMs);
+  if (preCached && minRefreshMs > 0 && preCached.ageMs < minRefreshMs) {
+    return { name, label, metrics:preCached.metrics, source:'cache', fresh:false, cacheAgeMs:preCached.ageMs, errors, throttled:true };
+  }
   try {
     const metrics = await fetcher(asOf);
     if (!metrics || !Object.keys(metrics).length) throw new Error('빈 데이터');
@@ -854,7 +881,7 @@ async function loadMacroProvider(name, label, fetcher, maxStaleMs, cacheEntry, a
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
   }
-  const cached = usableProviderCache(cacheEntry, maxStaleMs);
+  const cached = preCached || usableProviderCache(cacheEntry, maxStaleMs);
   if (cached) return { name, label, metrics:cached.metrics, source:'cache', fresh:false, cacheAgeMs:cached.ageMs, errors };
   return { name, label, metrics:{}, source:'missing', fresh:false, errors };
 }
@@ -883,10 +910,10 @@ async function buildMacroContext(env, asOf = Date.now()) {
     ['frb_jpy','Federal Reserve Board · USD/JPY',() => fetchFederalReserveSeries('USDJPY','https://www.federalreserve.gov/releases/h10/hist/dat00_ja.htm'),MACRO_PROVIDER_STALE_MS.federalreserve],
     ['cboe_vix','Cboe · VIX',() => fetchCboeSeries('VIX','https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv'),MACRO_PROVIDER_STALE_MS.cboe],
     ['cboe_ovx','Cboe · OVX',() => fetchCboeSeries('OVX','https://cdn.cboe.com/api/global/us_indices/daily_prices/OVX_History.csv'),MACRO_PROVIDER_STALE_MS.cboe],
-    ['bls','BLS · CPI/실업률',fetchBlsProvider,MACRO_PROVIDER_STALE_MS.bls],
+    ['bls','BLS · CPI/실업률',fetchBlsProvider,MACRO_PROVIDER_STALE_MS.bls,MACRO_PROVIDER_MIN_REFRESH_MS.bls],
     ['eia','EIA · WTI',fetchEiaProvider,MACRO_PROVIDER_STALE_MS.eia]
   ];
-  const settled = await Promise.all(providers.map(([name,label,fn,maxStale]) => loadMacroProvider(name,label,fn,maxStale,cacheMap[name],asOf)));
+  const settled = await Promise.all(providers.map(([name,label,fn,maxStale,minRefresh=0]) => loadMacroProvider(name,label,fn,maxStale,cacheMap[name],asOf,minRefresh)));
   const data = {}, sources = {}, errors = [];
   let freshCount = 0, cachedCount = 0, missingCount = 0;
 
@@ -917,7 +944,9 @@ async function buildMacroContext(env, asOf = Date.now()) {
   const total = MACRO_METRIC_IDS.length;
   const coverage = (freshCount + cachedCount) / total;
   const observedQualityWeight = clamp((freshCount + cachedCount * 0.60) / total, 0, 1);
-  const status = missingCount === 0 && cachedCount === 0 ? 'normal' : coverage >= 0.67 ? 'partial' : 'unavailable';
+  const usableCount = freshCount + cachedCount;
+  const partialMinCount = Math.ceil(total * 2 / 3); // 9개 중 6개 이상이면 부분 데이터로 안전하게 사용
+  const status = missingCount === 0 && cachedCount === 0 ? 'normal' : usableCount >= partialMinCount ? 'partial' : 'unavailable';
   const qualityWeight = status === 'unavailable' ? 0 : observedQualityWeight;
   const confidencePenalty = status === 'normal' ? 0 : status === 'partial' ? clamp(2 + missingCount * 1.2 + cachedCount * 0.5, 2, 8) : 10;
 
@@ -969,7 +998,7 @@ async function buildMacroContext(env, asOf = Date.now()) {
   return {
     score:rnd(score,2), rawScore:rnd(marketScore + eventScore,2), marketScore:rnd(marketScore,2), eventScore:rnd(eventScore,2),
     reasons, latestDates:Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null])), errors,
-    quality:{ status, total, freshCount, cachedCount, missingCount, coverage:rnd(coverage*100,1), observedWeight:rnd(observedQualityWeight,2), weight:rnd(qualityWeight,2), confidencePenalty:rnd(confidencePenalty,1), sources },
+    quality:{ status, total, freshCount, cachedCount, missingCount, usableCount, partialMinCount, coverage:rnd(coverage*100,1), observedWeight:rnd(observedQualityWeight,2), weight:rnd(qualityWeight,2), confidencePenalty:rnd(confidencePenalty,1), sources },
     raw:{ d10, d2, vix, vixCh, usd, oil, jpy, ovx, ovxCh, cpiYoy, un3 }
   };
 }

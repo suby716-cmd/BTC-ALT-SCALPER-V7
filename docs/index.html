@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0e17">
 <link rel="manifest" href="manifest.json">
-<title>BTC ALT SCALPER v8.1.3</title>
+<title>BTC ALT SCALPER v8.1.4</title>
 <style>
 :root{--bg:#080c15;--panel:#11182a;--panel2:#151f34;--line:#263149;--text:#e9edf7;--muted:#8290aa;--green:#4ade80;--yellow:#facc15;--red:#fb7185;--blue:#38bdf8;--violet:#a78bfa}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Arial,sans-serif}.wrap{max-width:1440px;margin:auto;padding:20px}.head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px}.title h1{margin:0;font-size:27px}.sub{color:var(--muted);margin-top:5px}.status{padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--yellow);margin-right:7px}.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}.card{padding:13px}.label{color:var(--muted);font-size:12px}.value{font-size:19px;font-weight:700;margin-top:4px}.panel{padding:14px;margin-top:11px}.controls,.btgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;align-items:center}.controls input,.controls select,.btgrid input,.btgrid select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px;border-radius:8px;width:100%}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:9px 12px;border-radius:8px;cursor:pointer}.btn:hover{border-color:var(--blue)}.btn.primary{border-color:var(--blue)}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-size:12px}.buy{color:var(--green);font-weight:700}.watch{color:var(--yellow);font-weight:700}.idle,.stale{color:var(--muted)}.error{color:var(--red)}.small{font-size:12px;color:var(--muted)}.signal{font-size:18px;font-weight:700}.reason{color:var(--muted);font-size:12px}.log{white-space:pre-wrap;background:#0c1220;border-radius:9px;padding:11px;min-height:55px}.subpanel{margin-top:10px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}.metricgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}.metric{padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.metric b{display:block;font-size:18px;margin-top:3px}.good{color:var(--green)}.bad{color:var(--red)}.neutral{color:var(--yellow)}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.note{border-left:3px solid var(--violet);padding:9px 11px;background:#121a2d}.danger{border-left-color:var(--red)}.ok{border-left-color:var(--green)}.ledgergrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.ledger-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.ledger-actions{display:flex;gap:8px;flex-wrap:wrap}.ledger-input{width:110px;max-width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 7px;border-radius:7px}.mini-btn{padding:6px 8px;font-size:12px}.pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
@@ -15,7 +15,7 @@
 <body>
 <div class="wrap">
   <div class="head">
-    <div class="title"><h1>⚡ BTC ALT SCALPER v8.1.3</h1><div class="sub">Upbit KRW 5분봉 · 완료봉 기준 · Cloudflare 24시간 Cron · Telegram 알림 전용</div></div>
+    <div class="title"><h1>⚡ BTC ALT SCALPER v8.1.4</h1><div class="sub">Upbit KRW 5분봉 · 완료봉 기준 · Cloudflare 24시간 Cron · Telegram 알림 전용</div></div>
     <div class="status"><span class="dot" id="dot"></span><span id="status">연결 준비중</span></div>
   </div>
 
@@ -70,7 +70,7 @@
 
   <div class="panel">
     <div class="ledger-head">
-      <div><b>📒 보유 · 매매 장부</b><div class="small">매수가·수량을 저장하고 실제 매도 후 매도가를 기록합니다. 장부 손익은 현재 v8.1.3에서 거래소 수수료 제외 기준입니다.</div></div>
+      <div><b>📒 보유 · 매매 장부</b><div class="small">매수가·수량을 저장하고 실제 매도 후 매도가를 기록합니다. 장부 손익은 현재 v8.1.4에서 거래소 수수료 제외 기준입니다.</div></div>
       <div class="ledger-actions"><span class="small" id="syncState">서버 동기화 대기중</span><button class="btn" id="ledgerRefresh">장부 새로고침</button><button class="btn" id="manualTrade">지난 거래 직접 기록</button></div>
     </div>
     <div id="ledgerSummary" class="ledgergrid"></div>
@@ -81,7 +81,7 @@
 
   <div class="panel">
     <b>📊 V8 Upbit KRW 백테스트</b>
-    <p class="small">Upbit KRW 완료 5분봉과 실시간 Worker의 동일 Score 계산식을 사용합니다. v8.1.3는 기존 단순 TP/SL뿐 아니라 실전 SELL 조건 재현과 ATR 기반 TP1·TP2·트레일링 연구 모드를 제공합니다. 신호는 완료봉에서 판정하고 다음 5분봉 시가에 진입합니다. 같은 봉에서 손절과 목표가가 모두 닿으면 보수적으로 손절을 우선합니다. <b>외부 거시/뉴스/예측시장 점수는 과거시점 데이터가 완전하지 않아 현재 백테스트에는 아직 포함하지 않습니다.</b></p>
+    <p class="small">Upbit KRW 완료 5분봉과 실시간 Worker의 동일 Score 계산식을 사용합니다. v8.1.4는 기존 단순 TP/SL뿐 아니라 실전 SELL 조건 재현과 ATR 기반 TP1·TP2·트레일링 연구 모드를 제공합니다. 신호는 완료봉에서 판정하고 다음 5분봉 시가에 진입합니다. 같은 봉에서 손절과 목표가가 모두 닿으면 보수적으로 손절을 우선합니다. <b>외부 거시/뉴스/예측시장 점수는 과거시점 데이터가 완전하지 않아 현재 백테스트에는 아직 포함하지 않습니다.</b></p>
     <div class="btgrid">
       <select id="btCoin"><option value="ALL">ALL</option><option>ETH</option><option>SOL</option><option>XRP</option><option>HBAR</option><option>ONDO</option><option>LINK</option><option>AVAX</option><option>DOGE</option><option>SUI</option><option>TAO</option><option>UNI</option><option>AAVE</option></select>
       <select id="btDays"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="60">최근 60일</option><option value="90">최근 90일</option></select>
@@ -115,7 +115,7 @@
 </div>
 
 <script>
-const VERSION='v8.1.3';
+const VERSION='v8.1.4';
 const COINS=['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const FIVE_MIN=5*60*1000,FIFTEEN_MIN=15*60*1000;
 const $=id=>document.getElementById(id);
