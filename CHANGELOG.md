@@ -1,60 +1,24 @@
 # Changelog
 
+## v8.1.0
+
+- 12개 코인(ETH/SOL/XRP/HBAR/ONDO/LINK/AVAX/DOGE/SUI/TAO/UNI/AAVE) 유지
+- Macro / Prediction / News / Manual Event를 합친 외부 Context Score 추가
+- FRED 공개 데이터 기반 미10Y·2Y, VIX, 달러, WTI, USD/JPY 프록시
+- FOMC 발표 전후 방향 중립적 이벤트 위험 패널티
+- Polymarket market ID 기반 확률 가중치 지원
+- CryptoPanic optional Secret 기반 코인 뉴스 휴리스틱 지원
+- 수동 호재/악재 이벤트(+10~-10, 만료시간, GLOBAL/코인별) UI 추가
+- 외부 호재만으로 BUY가 생성되지 않도록 기술적 hard gate 유지
+- 강한 외부 악재는 BUY 차단/SELL REVIEW 근거에 포함
+- Context API 실패 시 전체 Cron이 멈추지 않는 fail-open 처리
+- Context 결과 KV 캐시와 시간별 history snapshot 저장
+- Telegram BUY/SELL 메시지에 Tech/Context/합산 점수 추가
+- 백테스트 Score 구간 소수점 누락 버그 수정: 85~89.999 점수 등이 빠지던 문제 해결
+- 기존 KV namespace ID를 wrangler.toml에 고정해 자동배포 시 binding 유지
+
 ## v8.0.3
 
-- 백테스트 기간을 7/14/30/60/90일로 확장
-- 백테스트 모드 3종 추가: 개선형 ATR+SELL+Trail / 실전 SELL 동기형 / 기존 고정 TP/SL
-- 실전 Worker의 SELL 조건(BTC Crash, Risk-Off, EMA+상대모멘텀 약화, Score 하락, 수익보호)을 과거 봉에서 재현
-- 개선형 연구 모드에 ATR 기반 동적 SL/TP1/TP2와 TP1 50% 부분익절, TP2 이후 강화 트레일링 추가
-- 편도 수수료와 편도 슬리피지를 진입·청산 모두에 반영
-- Score 75/80/85/90과 3개 ATR 프로필을 비교하는 조건 탐색 추가
-- 학습 65% / 미래 35% 워크포워드 검증 강화
-- 코인별 거래 표본 20회 미만 경고 표시
-- 장기 데이터 캐시를 재사용하여 90일→짧은 기간 재실행 시 재다운로드 감소
-- 기존 v8.0.2의 매매장부·기기간 보유 동기화·UNI/KRW·AAVE/KRW 기능 유지
-- 연구 결과는 실시간 Worker에 자동 적용하지 않음
-
-## v8.0.2
-
-- UNI/KRW, AAVE/KRW를 실시간 스캔·Telegram·보유관리·백테스트 대상에 추가
-- 보유 체크박스가 이전 Cron 상태로 잠깐 되살아나는 화면 깜빡임 방지 강화
-- 보유 등록/매도 직후 API 응답의 최신 서버 상태를 화면에 즉시 반영
-- `/positions`를 이용해 열린 화면이 15초마다 보유 상태만 가볍게 동기화
-- 브라우저 탭/앱 화면으로 돌아올 때 보유/장부 즉시 재동기화
-- 업무용 PC·집 PC·휴대폰에서 같은 Worker/KV 상태를 공유하도록 안내 추가
-- 각 브라우저에는 Worker URL/PIN을 최초 1회 별도 저장해야 함을 명시
-
-## v8.0.1
-
-- 보유 등록 후 체크박스가 다음 Cron 전까지 풀려 보이던 상태 동기화 문제 수정
-- `/status`가 KV의 최신 보유 상태를 저장된 Cron 결과에 즉시 합쳐 반환
-- 보유 등록 시 실제 매수가와 보유 수량 저장
-- `/ledger` 장부 조회 API 추가
-- `/trade` 실제 매도/지난 거래 기록 API 추가
-- 부분 매도 및 잔여 수량 유지 지원
-- 매입금액, 평가금액, 미실현/실현 손익, 승률 요약 추가
-- GitHub Pages에 보유/매매 장부 UI 추가
-- 기존 v8 보유 데이터(수량 없음) 호환: 장부에서 수량만 수정 가능
-- 매도 완료 거래 최근 300건 KV 저장
-
-
-## v8.0.0
-
-- 실시간 데이터/표시/백테스트를 Upbit KRW로 통일
-- 내부 심볼을 `ETH`, `SOL` 등으로 정리하고 표시를 `/KRW`로 수정
-- 진행 중 캔들 제외, 완료된 5분봉만 신호 계산
-- Cron 시작 시 캔들 확정 대기 시간 추가
-- 수동 `/scan` Telegram 발송 제거
-- Cron 전용 자동 Telegram 발송 구조로 변경
-- KV 기반 동일 봉 + 시간 쿨다운 중복 방지
-- Cron 마지막 정상 결과 및 최근 오류 저장
-- 웹은 60초마다 KV의 Cron 결과만 조회
-- 실제 보유 등록 시 진입가 입력
-- 실시간/백테스트 Score 로직 통일
-- 15분 RSI를 완료된 5분봉에서 동일 규칙으로 재구성
-- EMA20 기울기 계산을 현재 EMA와 과거 EMA 비교 방식으로 수정
-- 돌파 판단을 종가 최고치가 아닌 최근 고가(high) 기준으로 수정
-- `MIN_SCORE`, TP1, TP2, SL, 쿨다운 설정을 Worker 환경변수와 연결
-- Upbit 브라우저 Origin 제한을 피하기 위한 1페이지 프록시 `/candles` 추가
-- ALL 백테스트를 시간순 1포지션 포트폴리오 기준으로 집계
-- Worker HTML 응답/오류를 JSON 오류로 정리하고 웹 오류 메시지 개선
+- 7/14/30/60/90일 백테스트
+- 실전 SELL 동기형, ATR+SELL+Trail 연구 모드
+- 워크포워드/스트레스 테스트

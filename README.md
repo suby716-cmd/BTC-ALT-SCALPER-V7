@@ -1,8 +1,25 @@
-# BTC ALT SCALPER v8.0.3
+# BTC ALT SCALPER v8.1.0
 
 Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
 
 > 이 프로젝트는 주문을 자동 실행하지 않습니다. Telegram 알림을 바탕으로 사용자가 직접 판단하는 수동매매 보조 도구입니다.
+
+
+## v8.1 외부 컨텍스트 연구 레이어
+
+기술적 Score는 그대로 유지하고, 외부 환경을 별도 Context Score로 계산합니다. **외부 호재만으로 BUY를 만들지 않으며 기술적 진입 조건은 반드시 통과해야 합니다.**
+
+- 자동 거시 프록시: FRED의 미 10Y/2Y 금리, VIX, 광의 달러지수, WTI, USD/JPY 변화
+- FOMC 이벤트 창: 방향을 예측하지 않고 발표 전후 신규진입 불확실성 패널티
+- Polymarket: 사용자가 등록한 시장 ID의 확률을 가중치 점수로 반영
+- 수동 이벤트: CLARITY 법안, Treasury buyback, 전쟁/휴전, ETF, 파트너십, 규제, 해킹 등 +10~-10과 만료시간으로 등록
+- CryptoPanic(선택): Secret이 있을 때만 12개 코인의 최근 뉴스 제목·투표를 저가중치로 점수화
+- Context가 강하게 부정적이면 BUY를 차단하고, 보유 포지션에서는 기술 약세와 함께 SELL 검토 사유로 추가
+- 매시간 Context snapshot을 KV에 남겨 향후 외부지표 포함 워크포워드 연구용 데이터를 축적
+
+기본 보호값은 `CONTEXT_BLOCK_THRESHOLD=-8`, `CONTEXT_SELL_THRESHOLD=-12`입니다. 호재 점수는 기술적 진입을 대신하지 않습니다.
+
+> Treasury buyback, 법안 통과, 전쟁, 선거 같은 사건의 방향성은 단순하지 않으므로 코드에 영구적인 +점수로 하드코딩하지 않았습니다. 현재 상황에 맞는 수동 이벤트 또는 예측시장 확률로 반영하도록 설계했습니다.
 
 ## v8.0.2부터 유지되는 장부·기기동기화 기능
 
@@ -39,7 +56,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - **부분 매도 지원**: 일부만 매도하면 남은 수량은 계속 보유 상태 유지
 - **거래 기록 KV 저장**: `trade-history:v1`에 최근 300건 보관
 
-> v8.0.3 장부 손익은 거래소 수수료를 제외한 단순 매수가/매도가 기준입니다. 수수료 반영은 후속 버전에서 추가할 수 있습니다.
+> v8.1 장부 손익은 거래소 수수료를 제외한 단순 매수가/매도가 기준입니다. 수수료 반영은 후속 버전에서 추가할 수 있습니다.
 
 ## v8 핵심 변경
 
@@ -65,7 +82,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.0.3입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.0입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets
@@ -75,6 +92,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - `SCALPER_PIN`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
+- `CRYPTOPANIC_AUTH_TOKEN` (선택: 코인 뉴스 컨텍스트를 사용할 때만)
 
 ## Cloudflare KV
 
@@ -100,6 +118,8 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - `SELL_COOLDOWN_MINUTES = 60`
 - `MAX_BUY_ALERTS = 2`
 - `CRON_DELAY_SECONDS = 12`
+- `CONTEXT_BLOCK_THRESHOLD = -8`
+- `CONTEXT_SELL_THRESHOLD = -12`
 
 값을 바꾼 뒤에는 Worker를 다시 배포해야 실시간 엔진에 반영됩니다. 웹 백테스트의 기본값은 `/health`에서 Worker 설정을 읽어 맞춥니다.
 

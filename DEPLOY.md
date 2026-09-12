@@ -100,7 +100,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.0.3",
+  "version": "v8.1.0",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -142,7 +142,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 보유 체크 시 실제 진입가(KRW)를 입력해야 합니다. SELL 검토 알림의 손익 계산은 이 값을 사용합니다.
 
-## v8.0.3 장부·기기 동기화 확인
+## v8.1.0 장부·기기 동기화 확인
 
 배포 후 GitHub Pages의 **보유 · 매매 장부**에서 다음을 확인합니다.
 
@@ -159,9 +159,9 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 보유/매매 데이터는 Cloudflare KV에 저장되어 기기 간 공유됩니다. Worker URL/PIN은 각 브라우저 로컬 저장이므로 새 기기에서는 다시 입력해야 합니다. Cloudflare KV는 전 세계 엣지에 전파되는 저장소라 아주 짧은 동기화 지연이 생길 수 있습니다.
 
-장부 손익은 v8.0.3에서는 거래소 수수료 제외 기준입니다.
+장부 손익은 v8.1.0에서는 거래소 수수료 제외 기준입니다.
 
-## v8.0.3 백테스트 확인
+## v8.1.0 백테스트 확인
 
 배포 후 백테스트 영역에서 다음 순서로 확인합니다.
 
@@ -191,3 +191,31 @@ GitHub Pages를 배포한 뒤 화면에서:
 - `SCALPER_PIN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`는 GitHub에 넣지 않습니다.
 - Worker PIN은 URL이나 스크린샷에 노출하지 않습니다.
 - 이 프로젝트는 Upbit 주문 API Key를 사용하지 않습니다. 자동 주문 기능도 포함하지 않습니다.
+
+
+## v8.1 외부 Context 추가 설정
+
+기본 Macro/FRED와 Polymarket 공개시장 조회는 별도 API 키가 필요 없습니다. 대시보드의 `외부 컨텍스트 새로고침`, `수동 이벤트 추가`, `예측시장 추가` 버튼으로 사용할 수 있습니다.
+
+코인 뉴스 자동점수를 사용하려면 Cloudflare Worker Secret에 선택적으로 다음을 추가합니다.
+
+```text
+CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
+```
+
+이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
+
+`/health`에서 v8.1.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+
+### Polymarket
+
+Polymarket의 market ID(숫자)를 등록하고, 해당 시장에서 코인에 호재인 outcome(예: `Yes`)과 가중치를 설정합니다. 처음에는 가중치 2~4를 권장하며, 하나의 예측시장만으로 BUY가 생성되지는 않습니다.
+
+### 수동 이벤트 예시
+
+- GLOBAL +3, 72시간: 규제 법안 진전
+- GLOBAL -4, 24시간: 지정학적 긴장 급증
+- AAVE +4, 168시간: 공식 파트너십/프로토콜 업그레이드
+- UNI -9, 12시간: 검증된 해킹/익스플로잇
+
+점수는 사실 자체가 아니라 **해당 사건이 현재 전략의 위험선호에 미치는 영향에 대한 운영자 판단**입니다. 출처와 만료시간을 함께 기록하세요.

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0e17">
 <link rel="manifest" href="manifest.json">
-<title>BTC ALT SCALPER v8.0.3</title>
+<title>BTC ALT SCALPER v8.1.0</title>
 <style>
 :root{--bg:#080c15;--panel:#11182a;--panel2:#151f34;--line:#263149;--text:#e9edf7;--muted:#8290aa;--green:#4ade80;--yellow:#facc15;--red:#fb7185;--blue:#38bdf8;--violet:#a78bfa}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Arial,sans-serif}.wrap{max-width:1440px;margin:auto;padding:20px}.head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px}.title h1{margin:0;font-size:27px}.sub{color:var(--muted);margin-top:5px}.status{padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--yellow);margin-right:7px}.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}.card{padding:13px}.label{color:var(--muted);font-size:12px}.value{font-size:19px;font-weight:700;margin-top:4px}.panel{padding:14px;margin-top:11px}.controls,.btgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;align-items:center}.controls input,.controls select,.btgrid input,.btgrid select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px;border-radius:8px;width:100%}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:9px 12px;border-radius:8px;cursor:pointer}.btn:hover{border-color:var(--blue)}.btn.primary{border-color:var(--blue)}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-size:12px}.buy{color:var(--green);font-weight:700}.watch{color:var(--yellow);font-weight:700}.idle,.stale{color:var(--muted)}.error{color:var(--red)}.small{font-size:12px;color:var(--muted)}.signal{font-size:18px;font-weight:700}.reason{color:var(--muted);font-size:12px}.log{white-space:pre-wrap;background:#0c1220;border-radius:9px;padding:11px;min-height:55px}.subpanel{margin-top:10px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}.metricgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}.metric{padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.metric b{display:block;font-size:18px;margin-top:3px}.good{color:var(--green)}.bad{color:var(--red)}.neutral{color:var(--yellow)}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.note{border-left:3px solid var(--violet);padding:9px 11px;background:#121a2d}.danger{border-left-color:var(--red)}.ok{border-left-color:var(--green)}.ledgergrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.ledger-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.ledger-actions{display:flex;gap:8px;flex-wrap:wrap}.ledger-input{width:110px;max-width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 7px;border-radius:7px}.mini-btn{padding:6px 8px;font-size:12px}.pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
@@ -15,7 +15,7 @@
 <body>
 <div class="wrap">
   <div class="head">
-    <div class="title"><h1>⚡ BTC ALT SCALPER v8.0.3</h1><div class="sub">Upbit KRW 5분봉 · 완료봉 기준 · Cloudflare 24시간 Cron · Telegram 알림 전용</div></div>
+    <div class="title"><h1>⚡ BTC ALT SCALPER v8.1.0</h1><div class="sub">Upbit KRW 5분봉 · 완료봉 기준 · Cloudflare 24시간 Cron · Telegram 알림 전용</div></div>
     <div class="status"><span class="dot" id="dot"></span><span id="status">연결 준비중</span></div>
   </div>
 
@@ -45,7 +45,7 @@
   <div class="hero">
     <div class="panel">
       <div class="signal" id="headline">최고 신호 대기중…</div><div class="reason" id="detail"></div>
-      <table><thead><tr><th>코인</th><th>Score</th><th>신뢰도</th><th>Risk</th><th>Signal</th><th>RSI</th><th>RSI-BTC</th><th>5m 상대</th><th>Vol</th><th>EMA9/20/50</th><th>돌파</th><th>보유</th></tr></thead><tbody id="rows"></tbody></table>
+      <table><thead><tr><th>코인</th><th>Tech</th><th>Ctx</th><th>합산</th><th>신뢰도</th><th>Risk</th><th>Signal</th><th>RSI</th><th>RSI-BTC</th><th>5m 상대</th><th>Vol</th><th>EMA9/20/50</th><th>돌파</th><th>보유</th></tr></thead><tbody id="rows"></tbody></table>
       <div class="small" style="margin-top:8px">☑ 보유 등록 시 실제 매수가(KRW)를 입력합니다. 보유 상태는 Cloudflare KV에 저장되고, 위험 조건이 발생하면 SELL 검토 알림을 보냅니다.</div>
     </div>
     <div class="panel">
@@ -56,7 +56,19 @@
 
   <div class="panel">
     <div class="ledger-head">
-      <div><b>📒 보유 · 매매 장부</b><div class="small">매수가·수량을 저장하고 실제 매도 후 매도가를 기록합니다. 장부 손익은 현재 v8.0.3에서 거래소 수수료 제외 기준입니다.</div></div>
+      <div><b>🌐 외부 컨텍스트 · 거시경제 · 예측시장 · 코인 이벤트</b><div class="small">기술적 신호를 대체하지 않고 보조 점수로만 사용합니다. 외부 호재만으로 BUY를 만들지 않으며 강한 악재는 BUY 차단/SELL 검토 사유가 될 수 있습니다.</div></div>
+      <div class="ledger-actions"><span class="small" id="contextFresh">컨텍스트 대기중</span><button class="btn" id="contextRefresh">외부 컨텍스트 새로고침</button><button class="btn" id="addEvent">수동 이벤트 추가</button><button class="btn" id="addPrediction">예측시장 추가</button></div>
+    </div>
+    <div id="contextSummary" class="ledgergrid"></div>
+    <div class="subpanel"><h3 style="margin-top:0">12개 코인 컨텍스트</h3><div id="contextCoins">대기중…</div></div>
+    <div class="subpanel"><h3 style="margin-top:0">활성 수동 이벤트</h3><div id="contextEvents">없음</div></div>
+    <div class="subpanel"><h3 style="margin-top:0">Polymarket 설정</h3><div id="contextPredictions">없음</div></div>
+    <div class="small" style="margin-top:8px">자동 거시지표는 FRED의 미 국채금리·VIX·달러·WTI·USD/JPY 변화를 저가중치로 반영합니다. 뉴스 점수는 CryptoPanic 토큰이 설정된 경우에만 작동하며, 제목 키워드/커뮤니티 투표를 이용한 보조 휴리스틱입니다. 정치·법안·전쟁·개별 코인 호재/악재는 수동 이벤트 또는 예측시장으로 보정할 수 있습니다.</div>
+  </div>
+
+  <div class="panel">
+    <div class="ledger-head">
+      <div><b>📒 보유 · 매매 장부</b><div class="small">매수가·수량을 저장하고 실제 매도 후 매도가를 기록합니다. 장부 손익은 현재 v8.1.0에서 거래소 수수료 제외 기준입니다.</div></div>
       <div class="ledger-actions"><span class="small" id="syncState">서버 동기화 대기중</span><button class="btn" id="ledgerRefresh">장부 새로고침</button><button class="btn" id="manualTrade">지난 거래 직접 기록</button></div>
     </div>
     <div id="ledgerSummary" class="ledgergrid"></div>
@@ -67,7 +79,7 @@
 
   <div class="panel">
     <b>📊 V8 Upbit KRW 백테스트</b>
-    <p class="small">Upbit KRW 완료 5분봉과 실시간 Worker의 동일 Score 계산식을 사용합니다. v8.0.3은 기존 단순 TP/SL뿐 아니라 실전 SELL 조건 재현과 ATR 기반 TP1·TP2·트레일링 연구 모드를 제공합니다. 신호는 완료봉에서 판정하고 다음 5분봉 시가에 진입합니다. 같은 봉에서 손절과 목표가가 모두 닿으면 보수적으로 손절을 우선합니다.</p>
+    <p class="small">Upbit KRW 완료 5분봉과 실시간 Worker의 동일 Score 계산식을 사용합니다. v8.1.0은 기존 단순 TP/SL뿐 아니라 실전 SELL 조건 재현과 ATR 기반 TP1·TP2·트레일링 연구 모드를 제공합니다. 신호는 완료봉에서 판정하고 다음 5분봉 시가에 진입합니다. 같은 봉에서 손절과 목표가가 모두 닿으면 보수적으로 손절을 우선합니다. <b>외부 거시/뉴스/예측시장 점수는 과거시점 데이터가 완전하지 않아 현재 백테스트에는 아직 포함하지 않습니다.</b></p>
     <div class="btgrid">
       <select id="btCoin"><option value="ALL">ALL</option><option>ETH</option><option>SOL</option><option>XRP</option><option>HBAR</option><option>ONDO</option><option>LINK</option><option>AVAX</option><option>DOGE</option><option>SUI</option><option>TAO</option><option>UNI</option><option>AAVE</option></select>
       <select id="btDays"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="60">최근 60일</option><option value="90">최근 90일</option></select>
@@ -101,7 +113,7 @@
 </div>
 
 <script>
-const VERSION='v8.0.3';
+const VERSION='v8.1.0';
 const COINS=['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const FIVE_MIN=5*60*1000,FIFTEEN_MIN=15*60*1000;
 const $=id=>document.getElementById(id);
@@ -132,36 +144,15 @@ async function health(){const r=await fetch(workerBase()+'/health',{cache:'no-st
 function applyConfig(d){if(!d?.strategy)return;SERVER_CFG={...SERVER_CFG,...d.strategy};$('btTP').value=SERVER_CFG.tp1Pct;$('btTP2').value=SERVER_CFG.tp2Pct;$('btSL').value=SERVER_CFG.stopLossPct;$('btThreshold').value=SERVER_CFG.minScore}
 function renderHealth(d){applyConfig(d);const ok=d.kv&&d.telegramConfigured&&d.pinConfigured;setConn(ok?'필수 설정 정상 · Cron 확인 필요':'설정 확인 필요',ok?'var(--yellow)':'var(--red)');$('quality').innerHTML=`<b>${esc(d.version||'—')}</b> · ${esc(d.market||'—')} · ${esc(d.timeframe||'—')}<br>KV: <b class="${d.kv?'good':'bad'}">${d.kv?'연결됨':'없음'}</b> · Telegram: <b class="${d.telegramConfigured?'good':'bad'}">${d.telegramConfigured?'설정됨':'없음'}</b> · PIN: <b class="${d.pinConfigured?'good':'bad'}">${d.pinConfigured?'설정됨':'없음'}</b><br>Score ≥ ${d.strategy?.minScore??'—'} · TP1 ${d.strategy?.tp1Pct??'—'}% · TP2 ${d.strategy?.tp2Pct??'—'}% · SL ${d.strategy?.stopLossPct??'—'}%`;$('healthNote').className='note '+(ok?'ok':'danger');$('healthNote').textContent=ok?'KV·Telegram·PIN 필수 설정은 정상입니다. 「Cron 상태」에서 최근 5~10분 내 실행 기록까지 확인되면 24시간 자동감시가 실제 동작 중입니다.':'KV/Telegram/PIN 중 빠진 설정이 있습니다. DEPLOY.md 순서대로 Cloudflare 설정을 확인하세요.'}
 
-function render(d){const r=d.results||[],ranked=r.filter(x=>Number.isFinite(Number(x.score))).sort((a,b)=>b.confidence-a.confidence||b.score-a.score),top=ranked[0];$('btc').textContent=money(d.btcPrice);$('brsi').textContent=fmtNum(d.btcRsi,1);$('bret').textContent=pctFmt(d.btcRet5);$('candle').textContent=kst(d.candleStart);if(top){$('top').textContent=top.score;$('conf').textContent=top.confidence;$('regime').textContent=top.regime;$('headline').textContent=`${top.signal==='BUY'?'🟢':top.signal==='WATCH'?'🟡':'⚪'} ${top.symbol}/KRW · Score ${top.score} · 신뢰도 ${top.confidence}`;$('detail').textContent=(top.reasons||[]).join(' · ')}$('rows').innerHTML=r.map(x=>`<tr><td>${esc(x.symbol)}/KRW</td><td>${x.score??'—'}</td><td>${x.confidence??'—'}</td><td>${esc(x.risk||'—')}</td><td class="${x.sell?'error':String(x.signal||'').toLowerCase()}">${x.sell?'SELL':esc(x.signal||'—')}</td><td>${x.rsi??'—'}</td><td>${x.rsiRel==null?'—':(x.rsiRel>=0?'+':'')+x.rsiRel}</td><td>${x.relRet5==null?'—':(x.relRet5>=0?'+':'')+x.relRet5+'%'}</td><td>${x.volRatio??'—'}${x.volRatio!=null?'x':''}</td><td>${x.ema9??'—'} / ${x.ema20??'—'} / ${x.ema50??'—'}</td><td>${x.breakout?'✓':'—'}</td><td>${Number.isFinite(Number(x.price))?`<input type="checkbox" data-hold-symbol="${x.symbol}" ${(d.held||[]).includes(x.symbol)?'checked':''} onchange="togglePos('${x.symbol}',this,${Number(x.price)})" title="체크=보유등록, 체크해제=실제 매도 기록">`:'—'}</td></tr>`).join('');const ageMin=d.scannedAt?(Date.now()-Number(d.scannedAt))/60000:null,cronFresh=d.source==='cron'&&ageMin!=null&&ageMin<=12;setConn(d.source==='cron'?(cronFresh?'24시간 자동감시 동작 중':'Cron 실행 지연 확인 필요'):'수동 조회 완료',d.source==='cron'?(cronFresh?'var(--green)':'var(--red)'):'var(--green)');if(d.source==='cron')$('quality').innerHTML=`<b>${cronFresh?'마지막 Cron 정상':'Cron 결과가 오래되었습니다'}</b><br>${kst(d.scannedAt)} KST · 완료봉 ${kst(d.candleStart)}<br>BUY 발송: ${(d.sent||[]).join(', ')||'없음'} · SELL 발송: ${(d.sold||[]).join(', ')||'없음'}${d.lastError?`<br><span class="bad">최근 오류: ${esc(d.lastError.error||'알 수 없음')}</span>`:''}<br><span class="small">브라우저가 닫혀 있어도 Cloudflare Cron이 독립 실행합니다.</span>`}
-
-
-function applyHeldState(d){
-  if(!d)return;
-  const held=new Set(d.held||Object.keys(d.positions||{}));
-  if(d.positions) LEDGER.positions=d.positions;
-  document.querySelectorAll('input[data-hold-symbol]').forEach(box=>{
-    box.checked=held.has(box.dataset.holdSymbol);
-  });
-  if($('syncState')) $('syncState').textContent=`서버 동기화 ${new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date())}`;
+function render(d){
+  const r=d.results||[],ranked=r.filter(x=>Number.isFinite(Number(x.score))).sort((a,b)=>b.confidence-a.confidence||Number(b.adjustedScore||b.score)-Number(a.adjustedScore||a.score)),top=ranked[0];
+  $('btc').textContent=money(d.btcPrice);$('brsi').textContent=fmtNum(d.btcRsi,1);$('bret').textContent=pctFmt(d.btcRet5);$('candle').textContent=kst(d.candleStart);
+  if(top){$('top').textContent=top.adjustedScore??top.score;$('conf').textContent=top.confidence;$('regime').textContent=top.regime;$('headline').textContent=`${top.signal==='BUY'?'🟢':top.signal==='WATCH'?'🟡':'⚪'} ${top.symbol}/KRW · Tech ${top.score} · Ctx ${Number(top.contextScore||0)>=0?'+':''}${top.contextScore||0} · 합산 ${top.adjustedScore??top.score}`;$('detail').textContent=(top.reasons||[]).join(' · ')}
+  $('rows').innerHTML=r.map(x=>`<tr><td>${esc(x.symbol)}/KRW</td><td>${x.score??'—'}</td><td class="${Number(x.contextScore||0)>0?'good':Number(x.contextScore||0)<0?'bad':''}">${Number(x.contextScore||0)>=0?'+':''}${x.contextScore??0}</td><td>${x.adjustedScore??x.score??'—'}</td><td>${x.confidence??'—'}</td><td>${esc(x.risk||'—')}</td><td class="${x.sell?'error':String(x.signal||'').toLowerCase()}">${x.sell?'SELL':esc(x.signal||'—')}</td><td>${x.rsi??'—'}</td><td>${x.rsiRel==null?'—':(x.rsiRel>=0?'+':'')+x.rsiRel}</td><td>${x.relRet5==null?'—':(x.relRet5>=0?'+':'')+x.relRet5+'%'}</td><td>${x.volRatio??'—'}${x.volRatio!=null?'x':''}</td><td>${x.ema9??'—'} / ${x.ema20??'—'} / ${x.ema50??'—'}</td><td>${x.breakout?'✓':'—'}</td><td>${Number.isFinite(Number(x.price))?`<input type="checkbox" data-hold-symbol="${x.symbol}" ${(d.held||[]).includes(x.symbol)?'checked':''} onchange="togglePos('${x.symbol}',this,${Number(x.price)})" title="체크=보유등록, 체크해제=실제 매도 기록">`:'—'}</td></tr>`).join('');
+  const ageMin=d.scannedAt?(Date.now()-Number(d.scannedAt))/60000:null,cronFresh=d.source==='cron'&&ageMin!=null&&ageMin<=12;setConn(d.source==='cron'?(cronFresh?'24시간 자동감시 동작 중':'Cron 실행 지연 확인 필요'):'수동 조회 완료',d.source==='cron'?(cronFresh?'var(--green)':'var(--red)'):'var(--green)');
+  if(d.source==='cron')$('quality').innerHTML=`<b>${cronFresh?'마지막 Cron 정상':'Cron 결과가 오래되었습니다'}</b><br>${kst(d.scannedAt)} KST · 완료봉 ${kst(d.candleStart)}<br>BUY 발송: ${(d.sent||[]).join(', ')||'없음'} · SELL 발송: ${(d.sold||[]).join(', ')||'없음'}${d.lastError?`<br><span class="bad">최근 오류: ${esc(d.lastError.error||'알 수 없음')}</span>`:''}<br><span class="small">브라우저가 닫혀 있어도 Cloudflare Cron이 독립 실행합니다.</span>`;
+  if(d.context) renderContext(d.context);
 }
-
-async function syncPositions(showLog=false){
-  try{
-    const d=await call('/positions');
-    applyHeldState(d);
-    if(showLog) log(`보유 상태 동기화 완료 · ${d.held?.length??0}개`);
-    return d;
-  }catch(e){
-    if(showLog) log('보유 동기화 오류: '+e.message);
-    throw e;
-  }
-}
-
-function renderLedger(d){LEDGER=d||LEDGER;applyHeldState(d);const s=d.summary||{};$('ledgerSummary').innerHTML=[['보유 매입금액',money(s.openCost)],['현재 평가금액',money(s.openValue)],['미실현 손익',`${money(s.unrealizedPnl)} (${pctFmt(s.unrealizedPct)})`],['누적 실현손익',money(s.realizedPnl)]].map(([a,b],i)=>`<div class="metric"><span class="small">${a}</span><b class="${i>=2?pnlClass(i===2?s.unrealizedPnl:s.realizedPnl):''}">${b}</b></div>`).join('');const open=d.open||[];if(!open.length){$('openLedger').innerHTML='<span class="small">현재 등록된 보유 코인이 없습니다.</span>'}else{$('openLedger').innerHTML=`<table><thead><tr><th>코인</th><th>매수가</th><th>수량</th><th>매입금액</th><th>현재가</th><th>평가손익</th><th>수익률</th><th>실제 매도가</th><th>매도수량</th><th>처리</th></tr></thead><tbody>${open.map(x=>`<tr><td>${esc(x.symbol)}/KRW</td><td>${money(x.entry)}</td><td>${x.quantity==null?'<span class="neutral">수량 미등록</span>':qtyFmt(x.quantity)}</td><td>${money(x.cost)}</td><td>${money(x.current)}</td><td class="${pnlClass(x.pnl)}">${money(x.pnl)}</td><td class="${pnlClass(x.pnlPct)}">${pctFmt(x.pnlPct)}</td><td><input class="ledger-input" id="sellPrice_${x.symbol}" inputmode="decimal" placeholder="매도가"></td><td><input class="ledger-input" id="sellQty_${x.symbol}" inputmode="decimal" value="${x.quantity??''}" placeholder="수량"></td><td><button class="btn mini-btn" onclick="recordSell('${x.symbol}')">매도 기록</button> <button class="btn mini-btn" onclick="editPosition('${x.symbol}')">수정</button></td></tr>`).join('')}</tbody></table>`}const hist=d.history||[];if(!hist.length){$('closedLedger').innerHTML='<span class="small">아직 매도 완료 기록이 없습니다.</span>'}else{$('closedLedger').innerHTML=`<table><thead><tr><th>매도시각</th><th>코인</th><th>매수가</th><th>매도가</th><th>수량</th><th>매입금액</th><th>매도금액</th><th>실현손익</th><th>수익률</th></tr></thead><tbody>${hist.slice(0,100).map(x=>`<tr><td>${kst(x.soldAt)}</td><td>${esc(x.symbol)}/KRW</td><td>${money(x.entry)}</td><td>${money(x.exit)}</td><td>${qtyFmt(x.quantity)}</td><td>${money(x.buyAmount)}</td><td>${money(x.sellAmount)}</td><td class="${pnlClass(x.pnl)}">${money(x.pnl)}</td><td class="${pnlClass(x.pnlPct)}">${pctFmt(x.pnlPct)}</td></tr>`).join('')}</tbody></table>`}}
-
-async function loadLedger(showLog=false){try{const d=await call('/ledger');renderLedger(d);if(showLog)log(`장부 새로고침 완료 · 보유 ${d.summary?.openCount??0}개 · 매도기록 ${d.summary?.closedTrades??0}건`);return d}catch(e){if(showLog)log('장부 오류: '+e.message);throw e}}
-
-async function registerPosition(sym,price){const ev=prompt(`${sym}/KRW 실제 매수가를 입력하세요.`,String(Math.round(price)));if(ev===null)return false;const entry=parseNumInput(ev);if(!entry)throw Error('올바른 매수가를 입력하세요.');const qv=prompt(`${sym} 실제 보유 수량을 입력하세요.\n예: 0.15`,LEDGER.positions?.[sym]?.quantity??'');if(qv===null)return false;const quantity=parseNumInput(qv);if(!quantity)throw Error('올바른 보유 수량을 입력하세요.');const d=await call('/position',{symbol:sym,action:'add',entry,quantity});applyHeldState(d);log(`☑ ${sym}/KRW 보유 등록 · 매수가 ${money(entry)} · 수량 ${qtyFmt(quantity)}`);return true}
 
 async function togglePos(sym,box,price){const wasChecked=!box.checked;try{if(box.checked){const ok=await registerPosition(sym,price);if(!ok){box.checked=false;return}}else{box.checked=true;const pos=LEDGER.positions?.[sym];const defaultExit=String(Math.round(price));const pv=prompt(`${sym}/KRW를 실제로 매도하셨다면 실제 매도가를 입력하세요.\n취소하면 보유 상태를 유지합니다.`,defaultExit);if(pv===null)return;const exit=parseNumInput(pv);if(!exit)throw Error('올바른 매도가를 입력하세요.');const qv=prompt('실제 매도 수량을 입력하세요.',pos?.quantity??'');if(qv===null)return;const quantity=parseNumInput(qv);if(!quantity)throw Error('올바른 매도 수량을 입력하세요.');const d=await call('/trade',{action:'sell',symbol:sym,exit,quantity});renderLedger(d);applyHeldState(d);log(`💰 ${sym}/KRW 매도 기록 · ${money(exit)} · 수량 ${qtyFmt(quantity)}`)}await loadStatus(false);await loadLedger(false)}catch(e){box.checked=wasChecked;log('오류: '+e.message)}}
 window.togglePos=togglePos;
@@ -183,12 +174,53 @@ $('ledgerRefresh').onclick=()=>loadLedger(true);
 $('manualTrade').onclick=manualTrade;
 $('scan').onclick=async()=>{try{log('완료된 5분봉으로 수동 조회 중… (Telegram 발송 안 함)');const d=await call('/scan');render(d);await loadLedger(false);log(`조회 완료 · 완료봉 ${kst(d.candleStart)} · Telegram 자동발송 없음`)}catch(e){log('오류: '+e.message)}};
 $('test').onclick=async()=>{try{await call('/test');log('Telegram 테스트 전송 완료')}catch(e){log('오류: '+e.message)}};
+if(W.value.trim()&&P.value.trim())loadContext(false).catch(()=>{});
+
+
+function signed(x){const n=Number(x)||0;return(n>=0?'+':'')+n.toFixed(2)}
+function renderContext(c){
+  if(!c)return;
+  const g=c.global||{};$('contextFresh').textContent=`갱신 ${kst(c.generatedAt)} KST${(c.errors||[]).length?' · 일부 오류':''}`;
+  const cards=[['글로벌',signed(g.total)],['Macro',signed(g.macro)],['Prediction',signed(g.prediction)],['Manual',signed(g.manual)]];
+  $('contextSummary').innerHTML=cards.map(([a,b])=>`<div class="metric"><span class="small">${esc(a)}</span><b class="${Number(b)>0?'good':Number(b)<0?'bad':''}">${esc(b)}</b></div>`).join('');
+  const rows=COINS.map(sym=>{const x=c.coins?.[sym]||{};return[sym+'/KRW',signed(x.macro),signed(x.news),signed(x.prediction),signed(x.manual),signed(x.total),x.severeRisk?'⚠️ 고위험':'—',(x.reasons||[]).slice(0,2).join(' · ')]});
+  $('contextCoins').innerHTML=table(['코인','Macro','News','Prediction','Manual','합계','위험','근거'],rows);
+  const ev=c.manualEvents||[];$('contextEvents').innerHTML=ev.length?table(['범위','점수','이벤트','만료',''],ev.map(x=>[x.scope,signed(x.score),x.label,kst(x.expiresAt),`삭제:${x.id}`])):'활성 수동 이벤트가 없습니다.';
+  if(ev.length){$('contextEvents').querySelectorAll('td:last-child').forEach((td,i)=>{td.innerHTML=`<button class="btn mini-btn" onclick="deleteContextEvent('${ev[i].id}')">삭제</button>`})}
+  const ps=c.prediction?.configured||[];$('contextPredictions').innerHTML=ps.length?table(['범위','Market ID','호재방향','가중치','이름',''],ps.map(x=>[x.scope,x.marketId,x.favorableOutcome,x.weight,x.label,`삭제:${x.id}`])):'등록된 예측시장이 없습니다.';
+  if(ps.length){$('contextPredictions').querySelectorAll('td:last-child').forEach((td,i)=>{td.innerHTML=`<button class="btn mini-btn" onclick="deletePrediction('${ps[i].id}')">삭제</button>`})}
+  if((c.errors||[]).length)$('contextFresh').title=(c.errors||[]).join('\n');
+}
+async function loadContext(force=false){try{const d=await call('/context',{action:force?'refresh':'get'});renderContext(d.context);return d}catch(e){$('contextFresh').textContent='컨텍스트 오류: '+e.message}}
+async function addContextEvent(){
+  const scope=(prompt('범위: GLOBAL 또는 코인 심볼(예: AAVE)','GLOBAL')||'').toUpperCase().trim();if(!scope)return;
+  const score=Number(prompt('점수 -10 ~ +10 (호재 +, 악재 -)','0'));if(!Number.isFinite(score)||score===0)return;
+  const label=prompt('이벤트 이름 (예: CLARITY 법안 통과 가능성 상승)','');if(!label)return;
+  const hours=Number(prompt('유효시간(시간). 예: 24시간=24, 7일=168','24'))||24;
+  const source=prompt('출처 메모/URL (선택)','')||'';
+  try{const d=await call('/context',{action:'add-event',scope,score,label,hours,source});renderContext(d.context);log('외부 이벤트를 저장했습니다.')}catch(e){log('오류: '+e.message)}
+}
+async function deleteContextEvent(id){if(!confirm('이 이벤트를 삭제할까요?'))return;const d=await call('/context',{action:'delete-event',id});renderContext(d.context)}
+window.deleteContextEvent=deleteContextEvent;
+async function addPrediction(){
+  const marketId=prompt('Polymarket Market ID(숫자)','');if(!marketId)return;
+  const scope=(prompt('범위: GLOBAL 또는 코인 심볼','GLOBAL')||'GLOBAL').toUpperCase().trim();
+  const favorableOutcome=prompt('코인에 호재인 결과명 (보통 Yes 또는 No)','Yes')||'Yes';
+  const weight=Number(prompt('가중치 0.5~10 (처음에는 2~4 권장)','3'))||3;
+  const label=prompt('이름 (예: CLARITY Act 통과)','')||`Polymarket ${marketId}`;
+  try{const d=await call('/context',{action:'add-prediction',marketId,scope,favorableOutcome,weight,label});renderContext(d.context);log('예측시장 설정을 저장했습니다.')}catch(e){log('오류: '+e.message)}
+}
+async function deletePrediction(id){if(!confirm('이 예측시장 설정을 삭제할까요?'))return;const d=await call('/context',{action:'delete-prediction',id});renderContext(d.context)}
+window.deletePrediction=deletePrediction;
+$('contextRefresh').onclick=()=>loadContext(true);
+$('addEvent').onclick=addContextEvent;
+$('addPrediction').onclick=addPrediction;
 
 // 시장 스냅샷/장부는 60초마다, 보유 체크는 15초마다 서버(KV)와 동기화합니다.
 // 이 조회들은 Upbit 시장을 새로 스캔하거나 Telegram을 발송하지 않습니다.
 setInterval(()=>{if(W.value.trim()&&P.value.trim()){loadStatus(false);loadLedger(false).catch(()=>{})}},60000);
 setInterval(()=>{if(W.value.trim()&&P.value.trim())syncPositions(false).catch(()=>{})},15000);
-window.addEventListener('focus',()=>{if(W.value.trim()&&P.value.trim()){syncPositions(false).catch(()=>{});loadLedger(false).catch(()=>{})}});
+window.addEventListener('focus',()=>{if(W.value.trim()&&P.value.trim()){syncPositions(false).catch(()=>{});loadLedger(false).catch(()=>{});loadContext(false).catch(()=>{})}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&W.value.trim()&&P.value.trim()){syncPositions(false).catch(()=>{});loadLedger(false).catch(()=>{})}});
 
 const closes=k=>k.map(x=>+x[4]),volumes=k=>k.map(x=>+x[5]);
@@ -338,7 +370,7 @@ function renderDetails(out,opts){
   const avgDyn=all.filter(x=>Number.isFinite(x.slPct)).reduce((a,x)=>({n:a.n+1,sl:a.sl+x.slPct,t1:a.t1+(x.tp1Pct||0),t2:a.t2+(x.tp2Pct||0),tr:a.tr+(x.trailPct||0)}),{n:0,sl:0,t1:0,t2:0,tr:0});
   $('btModeStats').innerHTML=`<b>검증 방식: ${modeLabel(opts.mode)}</b><br><span class="small">Score ≥ ${opts.threshold} · 편도 수수료 ${opts.fee}% · 편도 슬리피지 ${opts.slip}%${avgDyn.n&&opts.mode==='adaptive'?` · 실제 진입별 평균 동적 SL ${(avgDyn.sl/avgDyn.n).toFixed(2)}% / TP1 ${(avgDyn.t1/avgDyn.n).toFixed(2)}% / TP2 ${(avgDyn.t2/avgDyn.n).toFixed(2)}% / Trail ${(avgDyn.tr/avgDyn.n).toFixed(2)}%`:''}. 과거 성과는 미래 결과를 보장하지 않습니다.</span>`;
   $('btCoinStats').innerHTML='<h3>코인별 독립 성과</h3>'+table(['코인','표본','거래','승률','기대값','PF','MDD','복리'],out.map(x=>{const q=stats(x.trades);return[x.symbol+'/KRW',q.n>=20?'OK':'⚠️ 적음',q.n,q.n?q.win.toFixed(1)+'%':'—',q.n?q.avg.toFixed(3)+'%':'—',q.n?(q.pf===Infinity?'∞':q.pf.toFixed(2)):'—',q.n?q.mdd.toFixed(2)+'%':'—',q.n?q.net.toFixed(2)+'%':'—']}));
-  $('btScoreStats').innerHTML='<h3>Score 구간 · 포트폴리오 1포지션 기준</h3>'+table(['구간','거래','승률','기대값','PF'],[[75,79],[80,84],[85,89],[90,100]].map(([a,b])=>{const q=stats(all.filter(x=>x.score>=a&&x.score<=b));return[`${a}-${b}`,q.n,q.n?q.win.toFixed(1)+'%':'—',q.n?q.avg.toFixed(3)+'%':'—',q.n?(q.pf===Infinity?'∞':q.pf.toFixed(2)):'—']}));
+  $('btScoreStats').innerHTML='<h3>Score 구간 · 포트폴리오 1포지션 기준</h3>'+table(['구간','거래','승률','기대값','PF'],[[75,80],[80,85],[85,90],[90,100.0001]].map(([a,b],i)=>{const q=stats(all.filter(x=>x.score>=a&&x.score<b));const label=i<3?`${a}-${b-1}`:'90-100';return[label,q.n,q.n?q.win.toFixed(1)+'%':'—',q.n?q.avg.toFixed(3)+'%':'—',q.n?(q.pf===Infinity?'∞':q.pf.toFixed(2)):'—']}));
   $('btTimeStats').innerHTML='<h3>시간대(KST)</h3>'+table(['KST','거래','승률','기대값'],group(all,x=>String((new Date(x.time).getUTCHours()+9)%24).padStart(2,'0')).map(x=>[x.k,x.n,x.win.toFixed(1)+'%',x.avg.toFixed(3)+'%']));
   $('btRegimeStats').innerHTML='<h3>시장 국면</h3>'+table(['국면','거래','승률','기대값','PF'],group(all,x=>x.regime).map(x=>[x.k,x.n,x.win.toFixed(1)+'%',x.avg.toFixed(3)+'%',x.pf===Infinity?'∞':x.pf.toFixed(2)]));
   $('btRiskStats').innerHTML='<h3>청산 원인</h3>'+table(['결과','거래','승률','평균'],group(all,x=>x.reason).map(x=>[x.k,x.n,x.win.toFixed(1)+'%',x.avg.toFixed(3)+'%']));

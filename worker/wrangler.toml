@@ -3,7 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-09-10"
 
 [vars]
-# 실시간과 백테스트가 같은 기본값을 사용하도록 한 곳에서 관리합니다.
+# 실시간 기술 신호 기본값
 MIN_SCORE = "75"
 TP1_PERCENT = "1.2"
 TP2_PERCENT = "2.2"
@@ -13,12 +13,15 @@ SELL_COOLDOWN_MINUTES = "60"
 MAX_BUY_ALERTS = "2"
 CRON_DELAY_SECONDS = "12"
 
-# PC/브라우저와 무관하게 Cloudflare가 5분마다 자동 실행합니다.
+# v8.1 외부 컨텍스트 보호장치
+# 외부 호재만으로 BUY를 만들지 않습니다. 기술적 hard gate는 항상 필수입니다.
+CONTEXT_BLOCK_THRESHOLD = "-8"
+CONTEXT_SELL_THRESHOLD = "-12"
+
 [triggers]
 crons = ["*/5 * * * *"]
 
-# 24시간 자동 알림/중복 방지/보유 상태 저장에 KV가 필수입니다.
-# Cloudflare에서 KV namespace를 만든 뒤 실제 id로 바꾸고 주석을 해제하세요.
+# 기존 SCALPER_KV를 배포 설정에 고정하여 GitHub 자동배포 때 binding이 사라지지 않게 합니다.
 [[kv_namespaces]]
 binding = "SCALPER_KV"
 id = "b1d33dfeca5440dbba9b76b769c6bf95"

@@ -1,5 +1,5 @@
-const VERSION = 'v8.0.3';
-const STRATEGY_VERSION = 'krw-5m-v8';
+const VERSION = 'v8.1.0';
+const STRATEGY_VERSION = 'krw-5m-v8.1-context';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
@@ -7,6 +7,11 @@ const TRADE_HISTORY_KEY = 'trade-history:v1';
 const MAX_TRADE_HISTORY = 300;
 const LAST_RESULT_KEY = 'runtime:last-result';
 const LAST_ERROR_KEY = 'runtime:last-error';
+const CONTEXT_CACHE_KEY = 'context:auto:v1';
+const MANUAL_EVENTS_KEY = 'context:manual-events:v1';
+const PREDICTION_CONFIG_KEY = 'context:prediction-config:v1';
+const CONTEXT_CACHE_MS = 15 * 60 * 1000;
+const CONTEXT_HISTORY_TTL = 120 * 24 * 60 * 60;
 const FIVE_MIN = 5 * 60 * 1000;
 const FIFTEEN_MIN = 15 * 60 * 1000;
 
@@ -29,6 +34,7 @@ export default {
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
         coins: COINS,
+        externalContext: { fredMacro: true, polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
         note: 'Telegram 자동 신호는 Cron에서만 발송됩니다. /scan은 조회 전용입니다.'
       });
     }
@@ -111,6 +117,50 @@ export default {
       }
 
       return json({ ok: false, error: '지원하지 않는 거래 작업입니다.' }, 400);
+    }
+
+    if (req.method === 'POST' && u.pathname === '/context') {
+      requireKV(env);
+      const body = await readJson(req);
+      const action = String(body.action || 'get').toLowerCase();
+      if (action === 'add-event') {
+        const scope = normalizeContextScope(body.scope);
+        const score = clamp(Number(body.score) || 0, -10, 10);
+        const label = String(body.label || '').trim().slice(0, 140);
+        if (!label || score === 0) return json({ ok: false, error: '이벤트 이름과 0이 아닌 점수를 입력하세요.' }, 400);
+        const hours = clamp(Number(body.hours) || 24, 1, 24 * 90);
+        const events = await getManualEvents(env, false);
+        events.unshift({ id: crypto.randomUUID(), scope, score: rnd(score, 2), label, source: String(body.source || '').trim().slice(0, 300), createdAt: Date.now(), expiresAt: Date.now() + hours * 3600000 });
+        await env.SCALPER_KV.put(MANUAL_EVENTS_KEY, JSON.stringify(events.slice(0, 100)));
+        await env.SCALPER_KV.delete(CONTEXT_CACHE_KEY);
+        return json({ ok: true, ...(await getContextDashboard(env, { force: true })) });
+      }
+      if (action === 'delete-event') {
+        const events = (await getManualEvents(env, false)).filter(x => x.id !== body.id);
+        await env.SCALPER_KV.put(MANUAL_EVENTS_KEY, JSON.stringify(events));
+        await env.SCALPER_KV.delete(CONTEXT_CACHE_KEY);
+        return json({ ok: true, ...(await getContextDashboard(env, { force: true })) });
+      }
+      if (action === 'add-prediction') {
+        const marketId = String(body.marketId || '').trim();
+        const scope = normalizeContextScope(body.scope);
+        const favorableOutcome = String(body.favorableOutcome || 'Yes').trim().slice(0, 40);
+        const weight = clamp(Number(body.weight) || 4, 0.5, 10);
+        const label = String(body.label || `Polymarket ${marketId}`).trim().slice(0, 140);
+        if (!/^\d+$/.test(marketId)) return json({ ok: false, error: 'Polymarket market ID는 숫자 형식이어야 합니다.' }, 400);
+        const rows = await getPredictionConfig(env);
+        rows.unshift({ id: crypto.randomUUID(), marketId, scope, favorableOutcome, weight: rnd(weight, 2), label, createdAt: Date.now() });
+        await env.SCALPER_KV.put(PREDICTION_CONFIG_KEY, JSON.stringify(rows.slice(0, 20)));
+        await env.SCALPER_KV.delete(CONTEXT_CACHE_KEY);
+        return json({ ok: true, ...(await getContextDashboard(env, { force: true })) });
+      }
+      if (action === 'delete-prediction') {
+        const rows = (await getPredictionConfig(env)).filter(x => x.id !== body.id);
+        await env.SCALPER_KV.put(PREDICTION_CONFIG_KEY, JSON.stringify(rows));
+        await env.SCALPER_KV.delete(CONTEXT_CACHE_KEY);
+        return json({ ok: true, ...(await getContextDashboard(env, { force: true })) });
+      }
+      return json({ ok: true, ...(await getContextDashboard(env, { force: action === 'refresh' })) });
     }
 
     if (req.method === 'POST' && u.pathname === '/positions') {
@@ -312,11 +362,13 @@ function strategyConfig(env) {
     stopLossPct: numEnv(env.STOP_LOSS_PERCENT, 0.8),
     buyCooldownMin: numEnv(env.BUY_COOLDOWN_MINUTES ?? env.COOLDOWN_MINUTES, 20),
     sellCooldownMin: numEnv(env.SELL_COOLDOWN_MINUTES, 60),
-    maxBuyAlerts: clampInt(numEnv(env.MAX_BUY_ALERTS, 2), 1, 10)
+    maxBuyAlerts: clampInt(numEnv(env.MAX_BUY_ALERTS, 2), 1, 10),
+    contextBlockThreshold: numEnv(env.CONTEXT_BLOCK_THRESHOLD, -8),
+    contextSellThreshold: numEnv(env.CONTEXT_SELL_THRESHOLD, -12)
   };
 }
 
-function evaluateSignal(symbol, k5, b5, asOf, cfg) {
+function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
   if (k5.length < 60 || b5.length < 60) throw new Error('5분봉 데이터가 부족합니다.');
   const expectedStart = Math.floor(asOf / FIVE_MIN) * FIVE_MIN - FIVE_MIN;
   const altLast = k5.at(-1)?.[0];
@@ -355,10 +407,16 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg) {
 
   const crash = bret <= -0.9 || br < 40 || bp.at(-1) < be20 * 0.995;
   const regime = br >= 48 && br <= 68 && bp.at(-1) > be20 ? 'RISK_ON' : 'RISK_OFF';
-  const hard = score >= cfg.minScore && regime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
-  const signal = hard ? 'BUY' : (score >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
-  const confidence = clamp(score * 0.72 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 6 : 0) + (breakout ? 4 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0), 0, 100);
-  const risk = crash || regime === 'RISK_OFF' || r > 76 ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
+  const techScore = score;
+  const contextScore = clamp(Number(external?.total) || 0, -20, 20);
+  const adjustedScore = clamp(techScore + contextScore, 0, 100);
+  const contextBlocked = contextScore <= cfg.contextBlockThreshold || !!external?.severeRisk;
+  // 외부 호재만으로 기술적 진입 조건을 통과시키지 않습니다. 기술적 hard gate는 반드시 유지합니다.
+  const hardTech = techScore >= cfg.minScore && regime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
+  const hard = hardTech && !contextBlocked;
+  const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
+  const confidence = clamp(techScore * 0.68 + contextScore * 1.15 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 6 : 0) + (breakout ? 4 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0), 0, 100);
+  const risk = crash || regime === 'RISK_OFF' || r > 76 || contextScore <= -8 || external?.severeRisk ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
 
   return {
     symbol,
@@ -367,7 +425,11 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg) {
     candleStart: expectedStart,
     price,
     btcPrice: bp.at(-1),
-    score: rnd(score),
+    score: rnd(techScore),
+    adjustedScore: rnd(adjustedScore),
+    contextScore: rnd(contextScore),
+    context: external || null,
+    contextBlocked,
     confidence: rnd(confidence),
     risk,
     signal,
@@ -406,6 +468,8 @@ function sellCheck(s, pos, cfg) {
   if (s.ema9 < s.ema20 && s.relRet5 < 0) reasons.push('단기 추세·상대모멘텀 동시 약화');
   if (s.score < 48 && s.ema9 < s.ema20) reasons.push('종합점수 하락 + EMA 약세');
   if (entry && gain >= 1 && s.score < 55 && s.ema9 < s.ema20) reasons.push('수익 보호: 상승 후 추세 이탈');
+  if (s.context?.severeRisk) reasons.push('외부 이벤트 고위험 경보');
+  else if (Number(s.contextScore) <= cfg.contextSellThreshold && (s.regime === 'RISK_OFF' || s.score < 60)) reasons.push(`외부 컨텍스트 악화 ${s.contextScore}점`);
   return { sell: reasons.length > 0, gain: rnd(gain), reasons };
 }
 
@@ -567,6 +631,237 @@ async function buildLedger(env) {
   };
 }
 
+
+function normalizeContextScope(value) {
+  const s = normalizeSymbol(value || 'GLOBAL');
+  return COINS.includes(s) ? s : 'GLOBAL';
+}
+
+async function getManualEvents(env, clean = true) {
+  if (!env.SCALPER_KV) return [];
+  let rows = [];
+  try { rows = JSON.parse((await env.SCALPER_KV.get(MANUAL_EVENTS_KEY)) || '[]'); } catch {}
+  if (!Array.isArray(rows)) rows = [];
+  if (!clean) return rows;
+  const now = Date.now();
+  const live = rows.filter(x => !Number(x.expiresAt) || Number(x.expiresAt) > now).slice(0, 100);
+  if (live.length !== rows.length) await env.SCALPER_KV.put(MANUAL_EVENTS_KEY, JSON.stringify(live));
+  return live;
+}
+
+async function getPredictionConfig(env) {
+  if (!env.SCALPER_KV) return [];
+  try {
+    const rows = JSON.parse((await env.SCALPER_KV.get(PREDICTION_CONFIG_KEY)) || '[]');
+    return Array.isArray(rows) ? rows.slice(0, 20) : [];
+  } catch { return []; }
+}
+
+function parseFredCsv(text) {
+  const lines = String(text || '').trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const out = [];
+  for (const line of lines.slice(1)) {
+    const parts = line.split(',');
+    if (parts.length < 2) continue;
+    const v = Number(parts[1]);
+    if (Number.isFinite(v)) out.push({ date: parts[0], value: v });
+  }
+  return out;
+}
+
+async function fredSeries(id) {
+  const r = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}`, { headers: { accept: 'text/csv' } });
+  if (!r.ok) throw new Error(`FRED ${id} ${r.status}`);
+  return parseFredCsv(await r.text());
+}
+
+function seriesChangePct(rows, lookback = 5) {
+  if (!rows?.length) return null;
+  const last = rows.at(-1)?.value, prev = rows.at(-1 - Math.min(lookback, rows.length - 1))?.value;
+  return Number.isFinite(last) && Number.isFinite(prev) && prev !== 0 ? (last / prev - 1) * 100 : null;
+}
+function seriesChangeAbs(rows, lookback = 5) {
+  if (!rows?.length) return null;
+  const last = rows.at(-1)?.value, prev = rows.at(-1 - Math.min(lookback, rows.length - 1))?.value;
+  return Number.isFinite(last) && Number.isFinite(prev) ? last - prev : null;
+}
+
+async function buildMacroContext(asOf = Date.now()) {
+  const ids = ['DGS10','DGS2','VIXCLS','DTWEXBGS','DCOILWTICO','DEXJPUS'];
+  const settled = await Promise.allSettled(ids.map(fredSeries));
+  const data = {};
+  const errors = [];
+  ids.forEach((id, i) => settled[i].status === 'fulfilled' ? data[id] = settled[i].value : errors.push(`${id}: ${settled[i].reason?.message || 'fetch failed'}`));
+  let score = 0; const reasons = [];
+  const d10 = seriesChangeAbs(data.DGS10, 5);
+  if (d10 != null) { if (d10 <= -0.10) { score += 2; reasons.push(`미10Y 5일 ${rnd(d10,2)}%p`); } else if (d10 >= 0.10) { score -= 2; reasons.push(`미10Y 5일 +${rnd(d10,2)}%p`); } }
+  const d2 = seriesChangeAbs(data.DGS2, 5);
+  if (d2 != null) { if (d2 <= -0.10) score += 1; else if (d2 >= 0.10) score -= 1; }
+  const vixRows = data.VIXCLS || [], vix = vixRows.at(-1)?.value, vixCh = seriesChangePct(vixRows, 5);
+  if (Number.isFinite(vix)) { if (vix >= 30) { score -= 4; reasons.push(`VIX ${rnd(vix,1)} 고위험`); } else if (vix >= 24) score -= 2; else if (vix <= 17) score += 2; }
+  if (vixCh != null) { if (vixCh >= 15) score -= 2; else if (vixCh <= -15) score += 1; }
+  const usd = seriesChangePct(data.DTWEXBGS, 5);
+  if (usd != null) { if (usd >= 0.8) { score -= 2; reasons.push(`달러지수 5일 +${rnd(usd,2)}%`); } else if (usd <= -0.8) { score += 2; reasons.push(`달러지수 5일 ${rnd(usd,2)}%`); } }
+  const oil = seriesChangePct(data.DCOILWTICO, 5);
+  if (oil != null) { if (oil >= 7) { score -= 3; reasons.push(`WTI 5일 +${rnd(oil,1)}%`); } else if (oil >= 3) score -= 1; else if (oil <= -7) score += 1; }
+  const jpy = seriesChangePct(data.DEXJPUS, 5); // DEXJPUS = JPY per USD. 하락은 엔화 강세/캐리 청산 위험으로 보수적 처리.
+  if (jpy != null && jpy <= -1.5) { score -= 2; reasons.push(`엔화 강세 5일 ${rnd(jpy,1)}%`); }
+  // 방향을 예측하지 않고, 공식 FOMC 결정 직전에는 신규 진입에 불확실성 패널티만 줍니다.
+  const fomcUtc = ['2026-09-16T18:00:00Z','2026-10-28T18:00:00Z','2026-12-09T19:00:00Z'].map(Date.parse);
+  for (const t of fomcUtc) if (asOf >= t - 12*3600000 && asOf <= t + 2*3600000) { score -= 3; reasons.push('FOMC 결정 ± 이벤트 위험'); break; }
+  const latestDates = Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null]));
+  return { score: rnd(clamp(score, -10, 10), 2), reasons, latestDates, errors, raw: { d10, d2, vix, vixCh, usd, oil, jpy } };
+}
+
+async function buildPredictionContext(env) {
+  const config = await getPredictionConfig(env);
+  const global = { score: 0, reasons: [] }, coins = Object.fromEntries(COINS.map(c => [c, { score: 0, reasons: [] }]));
+  const errors = [], details = [];
+  for (const row of config) {
+    try {
+      const r = await fetch(`https://gamma-api.polymarket.com/markets/${encodeURIComponent(row.marketId)}`, { headers: { accept: 'application/json' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const m = await r.json();
+      const outcomes = Array.isArray(m.outcomes) ? m.outcomes : JSON.parse(m.outcomes || '[]');
+      const prices = Array.isArray(m.outcomePrices) ? m.outcomePrices : JSON.parse(m.outcomePrices || '[]');
+      const idx = outcomes.findIndex(x => String(x).toLowerCase() === String(row.favorableOutcome || 'Yes').toLowerCase());
+      const p = idx >= 0 ? Number(prices[idx]) : NaN;
+      if (!Number.isFinite(p)) throw new Error('outcome price 없음');
+      const contribution = clamp((p - 0.5) * 2 * Number(row.weight || 4), -10, 10);
+      const target = row.scope === 'GLOBAL' ? global : coins[normalizeContextScope(row.scope)];
+      target.score += contribution;
+      target.reasons.push(`${row.label}: ${row.favorableOutcome} ${(p*100).toFixed(0)}%`);
+      details.push({ ...row, probability: rnd(p*100, 1), contribution: rnd(contribution, 2), question: m.question || row.label });
+    } catch (e) { errors.push(`${row.label || row.marketId}: ${e.message}`); }
+  }
+  global.score = rnd(clamp(global.score, -8, 8), 2);
+  for (const c of COINS) coins[c].score = rnd(clamp(coins[c].score, -8, 8), 2);
+  return { config, global, coins, details, errors };
+}
+
+function newsKeywordScore(title) {
+  const t = String(title || '').toLowerCase();
+  let score = 0, severe = false;
+  const negSevere = ['hack','hacked','exploit','exploited','breach','drained','drain attack','51% attack'];
+  const neg = ['lawsuit','delist','outage','insolvency','bankruptcy','investigation','security incident'];
+  const pos = ['etf approval','etf approved','partnership','partners with','integration','integrates','mainnet launch','upgrade successful','institutional adoption','listing'];
+  if (negSevere.some(k => t.includes(k))) { score -= 4; severe = true; }
+  if (neg.some(k => t.includes(k))) score -= 1.5;
+  if (pos.some(k => t.includes(k))) score += 1.5;
+  return { score, severe };
+}
+
+async function buildNewsContext(env) {
+  const coins = Object.fromEntries(COINS.map(c => [c, { score: 0, reasons: [], severeRisk: false, items: [] }]));
+  if (!env.CRYPTOPANIC_AUTH_TOKEN) return { configured: false, coins, errors: [] };
+  const base = String(env.CRYPTOPANIC_API_BASE || 'https://cryptopanic.com/api/v1/posts/');
+  try {
+    const q = new URLSearchParams({ auth_token: env.CRYPTOPANIC_AUTH_TOKEN, currencies: COINS.join(','), kind: 'news', public: 'true' });
+    const r = await fetch(`${base}?${q.toString()}`, { headers: { accept: 'application/json' } });
+    if (!r.ok) throw new Error(`CryptoPanic ${r.status}`);
+    const d = await r.json();
+    const now = Date.now();
+    for (const post of (d.results || []).slice(0, 80)) {
+      const at = Date.parse(post.published_at || post.created_at || '');
+      const ageH = Number.isFinite(at) ? Math.max(0, (now-at)/3600000) : 24;
+      if (ageH > 24) continue;
+      const decay = ageH <= 3 ? 1 : ageH <= 12 ? .6 : .3;
+      const kw = newsKeywordScore(post.title);
+      const votes = post.votes || {};
+      const voteScore = clamp(((Number(votes.positive)||0) - (Number(votes.negative)||0)) * .12 + (Number(votes.important)||0) * .04, -2, 2);
+      const contribution = (kw.score + voteScore) * decay;
+      const codes = (post.currencies || post.instruments || []).map(x => normalizeSymbol(x.code || x.symbol || x)).filter(x => COINS.includes(x));
+      for (const c of codes) {
+        coins[c].score += contribution;
+        if (kw.severe && ageH <= 12) coins[c].severeRisk = true;
+        if (Math.abs(contribution) >= .5) coins[c].reasons.push(`${post.title}`.slice(0,120));
+        coins[c].items.push({ title: String(post.title || '').slice(0,160), at: Number.isFinite(at)?at:null, contribution:rnd(contribution,2) });
+      }
+    }
+    for (const c of COINS) coins[c].score = rnd(clamp(coins[c].score, -6, 6), 2);
+    return { configured: true, coins, errors: [] };
+  } catch (e) { return { configured: true, coins, errors: [e.message] }; }
+}
+
+function manualContext(events) {
+  const global = { score: 0, reasons: [], severeRisk: false }, coins = Object.fromEntries(COINS.map(c => [c, { score: 0, reasons: [], severeRisk: false }]));
+  for (const e of events) {
+    const target = e.scope === 'GLOBAL' ? global : coins[normalizeContextScope(e.scope)];
+    target.score += Number(e.score) || 0;
+    target.reasons.push(`${e.label} ${Number(e.score)>0?'+':''}${e.score}`);
+    if (Number(e.score) <= -8) target.severeRisk = true;
+  }
+  global.score = rnd(clamp(global.score, -10, 10),2);
+  for (const c of COINS) coins[c].score = rnd(clamp(coins[c].score, -10, 10),2);
+  return { global, coins };
+}
+
+async function archiveContext(env, context) {
+  if (!env.SCALPER_KV) return;
+  const d = new Date(context.generatedAt || Date.now());
+  const key = `context-history:${d.toISOString().slice(0,13)}`;
+  try {
+    if (!(await env.SCALPER_KV.get(key))) {
+      const compact = { generatedAt: context.generatedAt, global: context.global, coins: Object.fromEntries(COINS.map(c => [c, { total: context.coins[c]?.total, news: context.coins[c]?.news, prediction: context.coins[c]?.prediction, manual: context.coins[c]?.manual }])) };
+      await env.SCALPER_KV.put(key, JSON.stringify(compact), { expirationTtl: CONTEXT_HISTORY_TTL });
+    }
+  } catch {}
+}
+
+async function getExternalContext(env, { force = false, asOf = Date.now() } = {}) {
+  if (!env.SCALPER_KV) return emptyExternalContext('KV 미연결');
+  if (!force) {
+    try {
+      const raw = await env.SCALPER_KV.get(CONTEXT_CACHE_KEY);
+      if (raw) { const x = JSON.parse(raw); if (Date.now() - Number(x.generatedAt || 0) < CONTEXT_CACHE_MS) return x; }
+    } catch {}
+  }
+  const errors = [];
+  const events = await getManualEvents(env);
+  const [macroR, predR, newsR] = await Promise.allSettled([buildMacroContext(asOf), buildPredictionContext(env), buildNewsContext(env)]);
+  const macro = macroR.status === 'fulfilled' ? macroR.value : { score: 0, reasons: [], errors: [macroR.reason?.message || 'macro failed'] };
+  const pred = predR.status === 'fulfilled' ? predR.value : { config: [], global: {score:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{score:0,reasons:[]}])) , details:[], errors:[predR.reason?.message || 'prediction failed'] };
+  const news = newsR.status === 'fulfilled' ? newsR.value : { configured:false, coins:Object.fromEntries(COINS.map(c=>[c,{score:0,reasons:[],severeRisk:false,items:[]}])) , errors:[newsR.reason?.message || 'news failed'] };
+  errors.push(...(macro.errors||[]), ...(pred.errors||[]), ...(news.errors||[]));
+  const manual = manualContext(events);
+  const globalPrediction = Number(pred.global?.score)||0;
+  const globalManual = Number(manual.global?.score)||0;
+  const globalScore = clamp((Number(macro.score)||0) + globalPrediction + globalManual, -15, 15);
+  const coins = {};
+  for (const c of COINS) {
+    const newsScore = Number(news.coins?.[c]?.score)||0, prediction = Number(pred.coins?.[c]?.score)||0, man = Number(manual.coins?.[c]?.score)||0;
+    const total = clamp(globalScore + newsScore + prediction + man, -20, 20);
+    coins[c] = {
+      total: rnd(total,2), macro: rnd(Number(macro.score)||0,2), globalPrediction: rnd(globalPrediction,2), globalManual: rnd(globalManual,2),
+      news: rnd(newsScore,2), prediction: rnd(prediction,2), manual: rnd(man,2),
+      severeRisk: !!(manual.global?.severeRisk || manual.coins?.[c]?.severeRisk || news.coins?.[c]?.severeRisk),
+      reasons: [...(macro.reasons||[]), ...(pred.global?.reasons||[]), ...(manual.global?.reasons||[]), ...(pred.coins?.[c]?.reasons||[]), ...(manual.coins?.[c]?.reasons||[]), ...(news.coins?.[c]?.reasons||[])].slice(0,8)
+    };
+  }
+  const context = {
+    generatedAt: Date.now(),
+    global: { total: rnd(globalScore,2), macro: rnd(Number(macro.score)||0,2), prediction: rnd(globalPrediction,2), manual: rnd(globalManual,2), reasons:[...(macro.reasons||[]), ...(pred.global?.reasons||[]), ...(manual.global?.reasons||[])].slice(0,8) },
+    coins, macro, prediction: { configured: pred.config||[], details: pred.details||[] }, news: { configured: !!news.configured }, manualEvents: events, errors
+  };
+  await env.SCALPER_KV.put(CONTEXT_CACHE_KEY, JSON.stringify(context), { expirationTtl: 3600 });
+  await archiveContext(env, context);
+  return context;
+}
+
+function emptyExternalContext(error = null) {
+  return { generatedAt: Date.now(), global:{total:0,macro:0,prediction:0,manual:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{total:0,macro:0,globalPrediction:0,globalManual:0,news:0,prediction:0,manual:0,severeRisk:false,reasons:[]}])) , macro:{score:0,reasons:[]}, prediction:{configured:[],details:[]}, news:{configured:false}, manualEvents:[], errors:error?[error]:[] };
+}
+
+function contextForSymbol(context, symbol) {
+  return context?.coins?.[symbol] || { total: 0, severeRisk: false, reasons: [] };
+}
+
+async function getContextDashboard(env, { force = false } = {}) {
+  const context = await getExternalContext(env, { force });
+  return { context, coins: COINS, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, note: '외부 호재만으로 BUY를 만들지 않으며, 기술적 진입 조건은 항상 필수입니다.' };
+}
+
 async function shouldNotify(env, type, symbol, candleStart, cooldownMs) {
   const key = `last:${type}:${symbol}`;
   // v7의 ETHUSDT 형태 cooldown key도 한 번 읽어 업그레이드 직후 중복 알림을 줄입니다.
@@ -592,13 +887,14 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
   const startedAt = Date.now();
   const b5 = await recentClosed5m('BTC', asOf, 180);
   const expectedStart = Math.floor(asOf / FIVE_MIN) * FIVE_MIN - FIVE_MIN;
+  const context = await getExternalContext(env, { force: false, asOf });
   if (b5.at(-1)?.[0] !== expectedStart) throw new Error('BTC 최신 완료 5분봉을 가져오지 못했습니다.');
 
   const results = [];
   for (const symbol of COINS) {
     try {
       const k5 = await recentClosed5m(symbol, asOf, 180);
-      results.push(evaluateSignal(symbol, k5, b5, asOf, cfg));
+      results.push(evaluateSignal(symbol, k5, b5, asOf, cfg, contextForSymbol(context, symbol)));
     } catch (e) {
       results.push({ symbol, market: marketOf(symbol), signal: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     }
@@ -677,7 +973,8 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
     sellSignals: sellSignals.map(x => x.symbol),
     top: results.filter(x => Number.isFinite(x.score)).sort((a, b) => b.confidence - a.confidence || b.score - a.score).slice(0, 5),
     results,
-    strategy: cfg
+    strategy: cfg,
+    context
   };
 }
 
@@ -690,11 +987,11 @@ function kstTime(ms) {
 }
 
 function formatBuy(s, cfg) {
-  return `🟢 BUY SIGNAL ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\nScore: ${s.score}/100 (기준 ${cfg.minScore})\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🎯 TP1 +${cfg.tp1Pct}%: ₩${fmt(s.tp1)}\n🎯 TP2 +${cfg.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 SL -${cfg.stopLossPct}%: ₩${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n⚠️ 알림 전용이며 주문은 자동 실행하지 않습니다.`;
+  return `🟢 BUY SIGNAL ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\nTech Score: ${s.score}/100 (기준 ${cfg.minScore})\n외부 Context: ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 합산 ${s.adjustedScore}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🎯 TP1 +${cfg.tp1Pct}%: ₩${fmt(s.tp1)}\n🎯 TP2 +${cfg.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 SL -${cfg.stopLossPct}%: ₩${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n⚠️ 알림 전용이며 주문은 자동 실행하지 않습니다.`;
 }
 
 function formatSell(s) {
-  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nScore: ${s.score}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
+  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nTech Score: ${s.score}/100 · Context ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
 }
 
 function fmt(x) {
