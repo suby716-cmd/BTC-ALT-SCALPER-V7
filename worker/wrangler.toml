@@ -13,7 +13,7 @@ SELL_COOLDOWN_MINUTES = "60"
 MAX_BUY_ALERTS = "2"
 CRON_DELAY_SECONDS = "12"
 
-# v8.1 외부 컨텍스트 보호장치
+# v8.1.2 외부 컨텍스트 보호장치
 # 외부 호재만으로 BUY를 만들지 않습니다. 기술적 hard gate는 항상 필수입니다.
 CONTEXT_BLOCK_THRESHOLD = "-8"
 CONTEXT_SELL_THRESHOLD = "-12"
@@ -25,3 +25,6 @@ crons = ["*/5 * * * *"]
 [[kv_namespaces]]
 binding = "SCALPER_KV"
 id = "b1d33dfeca5440dbba9b76b769c6bf95"
+
+# 선택 Secret: FRED_API_KEY (설정 시 공식 FRED API 우선, 미설정 시 CSV→KV 캐시 fallback)
+# 토큰/키는 이 파일이나 GitHub에 적지 말고 Cloudflare Secret으로만 등록하세요.

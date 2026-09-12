@@ -1,4 +1,4 @@
-# BTC ALT SCALPER v8.1.1
+# BTC ALT SCALPER v8.1.2
 
 Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
 
@@ -11,6 +11,16 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - 복구 함수: `applyHeldState`, `syncPositions`, `renderLedger`, `loadLedger`, `registerPosition`.
 - Worker/KV/Telegram은 정상 연결되어 있었지만 웹 상단이 `연결 확인 필요`로 표시되고 Cron 상태/장부가 렌더링되지 않던 증상을 해결합니다.
 - v8.1 Context/Macro/Prediction/Manual event 및 12개 코인 감시는 그대로 유지합니다.
+
+
+## v8.1.2 Macro 안정화
+
+- FRED 거시지표 수집을 **공식 API(FRED_API_KEY 설정 시) → 기존 CSV → KV 최근 정상 캐시** 순으로 다중화했습니다.
+- 6개 지표 각각의 소스를 `API / CSV / CACHE / 실패`로 표시합니다.
+- Macro 데이터가 부족한데 `+0.00`으로 정상 중립처럼 보이던 문제를 수정하여 `정상 / 부분 데이터 / 사용불가(N/A)`를 구분합니다.
+- 부분/사용불가 상태에서는 외부 거시 점수를 품질 비율만큼 축소하고 실시간 신뢰도에 보수적 감점을 적용합니다.
+- FOMC 이벤트 창 패널티는 데이터 공급 장애와 무관하므로 별도로 유지합니다.
+- `FRED_API_KEY`는 선택 Secret이며 GitHub에 절대 기록하지 않습니다. 키가 없어도 CSV와 최근 정상 캐시 fallback은 작동합니다.
 
 ## v8.1 외부 컨텍스트 연구 레이어
 
@@ -89,7 +99,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.0입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.2입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets

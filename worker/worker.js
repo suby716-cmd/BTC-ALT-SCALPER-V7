@@ -1,5 +1,5 @@
-const VERSION = 'v8.1.1';
-const STRATEGY_VERSION = 'krw-5m-v8.1.1-context';
+const VERSION = 'v8.1.2';
+const STRATEGY_VERSION = 'krw-5m-v8.1.2-context';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
@@ -12,6 +12,12 @@ const MANUAL_EVENTS_KEY = 'context:manual-events:v1';
 const PREDICTION_CONFIG_KEY = 'context:prediction-config:v1';
 const CONTEXT_CACHE_MS = 15 * 60 * 1000;
 const CONTEXT_HISTORY_TTL = 120 * 24 * 60 * 60;
+const FRED_SERIES_CACHE_KEY = 'macro:fred-cache:v1';
+const FRED_SERIES_CACHE_TTL = 14 * 24 * 60 * 60;
+const FRED_SERIES_MAX_STALE_MS = 96 * 60 * 60 * 1000;
+const FRED_FETCH_TIMEOUT_MS = 9000;
+const FRED_IDS = ['DGS10','DGS2','VIXCLS','DTWEXBGS','DCOILWTICO','DEXJPUS'];
+const FRED_LABELS = { DGS10:'미10Y', DGS2:'미2Y', VIXCLS:'VIX', DTWEXBGS:'광의달러', DCOILWTICO:'WTI', DEXJPUS:'USD/JPY' };
 const FIVE_MIN = 5 * 60 * 1000;
 const FIFTEEN_MIN = 15 * 60 * 1000;
 
@@ -34,7 +40,7 @@ export default {
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
         coins: COINS,
-        externalContext: { fredMacro: true, polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
+        externalContext: { fredMacro: true, fredApiKeyConfigured: !!env.FRED_API_KEY, polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
         note: 'Telegram 자동 신호는 Cron에서만 발송됩니다. /scan은 조회 전용입니다.'
       });
     }
@@ -415,7 +421,8 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
   const hardTech = techScore >= cfg.minScore && regime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
   const hard = hardTech && !contextBlocked;
   const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
-  const confidence = clamp(techScore * 0.68 + contextScore * 1.15 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 6 : 0) + (breakout ? 4 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0), 0, 100);
+  const contextDataPenalty = clamp(Number(external?.confidencePenalty)||0, 0, 15);
+  const confidence = clamp(techScore * 0.68 + contextScore * 1.15 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 6 : 0) + (breakout ? 4 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0) - contextDataPenalty, 0, 100);
   const risk = crash || regime === 'RISK_OFF' || r > 76 || contextScore <= -8 || external?.severeRisk ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
 
   return {
@@ -430,6 +437,7 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
     contextScore: rnd(contextScore),
     context: external || null,
     contextBlocked,
+    contextDataPenalty: rnd(contextDataPenalty,1),
     confidence: rnd(confidence),
     risk,
     signal,
@@ -670,10 +678,86 @@ function parseFredCsv(text) {
   return out;
 }
 
-async function fredSeries(id) {
-  const r = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}`, { headers: { accept: 'text/csv' } });
-  if (!r.ok) throw new Error(`FRED ${id} ${r.status}`);
-  return parseFredCsv(await r.text());
+function isoDate(ms) {
+  return new Date(ms).toISOString().slice(0,10);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = FRED_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetch(url, { ...options, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+function parseFredApiJson(data) {
+  const out = [];
+  for (const row of (data?.observations || [])) {
+    const v = Number(row?.value);
+    if (Number.isFinite(v)) out.push({ date: row.date, value: v });
+  }
+  return out;
+}
+
+async function fredSeriesViaApi(env, id, asOf = Date.now()) {
+  if (!env.FRED_API_KEY) throw new Error('FRED_API_KEY 미설정');
+  const start = isoDate(asOf - 90 * 24 * 60 * 60 * 1000);
+  const q = new URLSearchParams({
+    series_id: id, api_key: env.FRED_API_KEY, file_type: 'json',
+    observation_start: start, sort_order: 'asc'
+  });
+  const r = await fetchWithTimeout(`https://api.stlouisfed.org/fred/series/observations?${q.toString()}`, { headers: { accept: 'application/json' } });
+  if (!r.ok) throw new Error(`FRED API ${id} ${r.status}`);
+  const rows = parseFredApiJson(await r.json());
+  if (rows.length < 2) throw new Error(`FRED API ${id} 데이터 부족`);
+  return rows;
+}
+
+async function fredSeriesViaCsv(id) {
+  const r = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}`, { headers: { accept: 'text/csv' } });
+  if (!r.ok) throw new Error(`FRED CSV ${id} ${r.status}`);
+  const rows = parseFredCsv(await r.text());
+  if (rows.length < 2) throw new Error(`FRED CSV ${id} 데이터 부족`);
+  return rows;
+}
+
+async function readFredCacheMap(env) {
+  if (!env.SCALPER_KV) return {};
+  try {
+    const raw = await env.SCALPER_KV.get(FRED_SERIES_CACHE_KEY);
+    const x = raw ? JSON.parse(raw) : {};
+    return x && typeof x === 'object' ? x : {};
+  } catch { return {}; }
+}
+
+async function writeFredCacheMap(env, map) {
+  if (!env.SCALPER_KV) return;
+  try {
+    await env.SCALPER_KV.put(FRED_SERIES_CACHE_KEY, JSON.stringify(map), { expirationTtl: FRED_SERIES_CACHE_TTL });
+  } catch {}
+}
+
+function usableFredCache(entry) {
+  if (!entry || !Array.isArray(entry.rows) || entry.rows.length < 2) return null;
+  const ageMs = Date.now() - Number(entry.fetchedAt || 0);
+  if (!Number.isFinite(ageMs) || ageMs > FRED_SERIES_MAX_STALE_MS) return null;
+  return { rows: entry.rows, fetchedAt: Number(entry.fetchedAt), ageMs };
+}
+
+async function loadFredSeries(env, id, asOf = Date.now(), cachedEntry = null) {
+  const attempts = [];
+  if (env.FRED_API_KEY) {
+    try {
+      const rows = await fredSeriesViaApi(env, id, asOf);
+      return { id, rows, source: 'api', fresh: true, errors: attempts, cacheUpdate: { fetchedAt: Date.now(), source: 'api', rows: rows.slice(-45) } };
+    } catch (e) { attempts.push(e instanceof Error ? e.message : String(e)); }
+  }
+  try {
+    const rows = await fredSeriesViaCsv(id);
+    return { id, rows, source: 'csv', fresh: true, errors: attempts, cacheUpdate: { fetchedAt: Date.now(), source: 'csv', rows: rows.slice(-45) } };
+  } catch (e) { attempts.push(e instanceof Error ? e.message : String(e)); }
+  const cached = usableFredCache(cachedEntry);
+  if (cached) return { id, rows: cached.rows, source: 'cache', fresh: false, cacheAgeMs: cached.ageMs, errors: attempts };
+  return { id, rows: [], source: 'missing', fresh: false, errors: attempts };
 }
 
 function seriesChangePct(rows, lookback = 5) {
@@ -687,31 +771,63 @@ function seriesChangeAbs(rows, lookback = 5) {
   return Number.isFinite(last) && Number.isFinite(prev) ? last - prev : null;
 }
 
-async function buildMacroContext(asOf = Date.now()) {
-  const ids = ['DGS10','DGS2','VIXCLS','DTWEXBGS','DCOILWTICO','DEXJPUS'];
-  const settled = await Promise.allSettled(ids.map(fredSeries));
+async function buildMacroContext(env, asOf = Date.now()) {
+  const cacheMap = await readFredCacheMap(env);
+  const settled = await Promise.all(FRED_IDS.map(id => loadFredSeries(env, id, asOf, cacheMap[id])));
   const data = {};
+  const sources = {};
   const errors = [];
-  ids.forEach((id, i) => settled[i].status === 'fulfilled' ? data[id] = settled[i].value : errors.push(`${id}: ${settled[i].reason?.message || 'fetch failed'}`));
-  let score = 0; const reasons = [];
+  let freshCount = 0, cachedCount = 0, missingCount = 0;
+  for (const row of settled) {
+    if (row.rows?.length) data[row.id] = row.rows;
+    sources[row.id] = {
+      label: FRED_LABELS[row.id] || row.id, source: row.source,
+      latestDate: row.rows?.at(-1)?.date || null,
+      cacheAgeHours: row.source === 'cache' ? rnd((Number(row.cacheAgeMs)||0)/3600000,1) : null
+    };
+    if (row.source === 'api' || row.source === 'csv') freshCount++;
+    else if (row.source === 'cache') cachedCount++;
+    else missingCount++;
+    if (row.errors?.length) errors.push(`${row.id}: ${row.errors.join(' → ')}`);
+    if (row.cacheUpdate) cacheMap[row.id] = row.cacheUpdate;
+  }
+  if (settled.some(x => x.cacheUpdate)) await writeFredCacheMap(env, cacheMap);
+
+  const coverage = (freshCount + cachedCount) / FRED_IDS.length;
+  const observedQualityWeight = clamp((freshCount + cachedCount * 0.55) / FRED_IDS.length, 0, 1);
+  const status = missingCount === 0 && cachedCount === 0 ? 'normal' : coverage >= 0.67 ? 'partial' : 'unavailable';
+  const qualityWeight = status === 'unavailable' ? 0 : observedQualityWeight;
+  const confidencePenalty = status === 'normal' ? 0 : status === 'partial' ? clamp(3 + missingCount * 1.5 + cachedCount * 0.75, 3, 8) : 10;
+
+  let marketScore = 0, eventScore = 0; const reasons = [];
   const d10 = seriesChangeAbs(data.DGS10, 5);
-  if (d10 != null) { if (d10 <= -0.10) { score += 2; reasons.push(`미10Y 5일 ${rnd(d10,2)}%p`); } else if (d10 >= 0.10) { score -= 2; reasons.push(`미10Y 5일 +${rnd(d10,2)}%p`); } }
+  if (d10 != null) { if (d10 <= -0.10) { marketScore += 2; reasons.push(`미10Y 5일 ${rnd(d10,2)}%p`); } else if (d10 >= 0.10) { marketScore -= 2; reasons.push(`미10Y 5일 +${rnd(d10,2)}%p`); } }
   const d2 = seriesChangeAbs(data.DGS2, 5);
-  if (d2 != null) { if (d2 <= -0.10) score += 1; else if (d2 >= 0.10) score -= 1; }
+  if (d2 != null) { if (d2 <= -0.10) marketScore += 1; else if (d2 >= 0.10) marketScore -= 1; }
   const vixRows = data.VIXCLS || [], vix = vixRows.at(-1)?.value, vixCh = seriesChangePct(vixRows, 5);
-  if (Number.isFinite(vix)) { if (vix >= 30) { score -= 4; reasons.push(`VIX ${rnd(vix,1)} 고위험`); } else if (vix >= 24) score -= 2; else if (vix <= 17) score += 2; }
-  if (vixCh != null) { if (vixCh >= 15) score -= 2; else if (vixCh <= -15) score += 1; }
+  if (Number.isFinite(vix)) { if (vix >= 30) { marketScore -= 4; reasons.push(`VIX ${rnd(vix,1)} 고위험`); } else if (vix >= 24) marketScore -= 2; else if (vix <= 17) marketScore += 2; }
+  if (vixCh != null) { if (vixCh >= 15) marketScore -= 2; else if (vixCh <= -15) marketScore += 1; }
   const usd = seriesChangePct(data.DTWEXBGS, 5);
-  if (usd != null) { if (usd >= 0.8) { score -= 2; reasons.push(`달러지수 5일 +${rnd(usd,2)}%`); } else if (usd <= -0.8) { score += 2; reasons.push(`달러지수 5일 ${rnd(usd,2)}%`); } }
+  if (usd != null) { if (usd >= 0.8) { marketScore -= 2; reasons.push(`달러지수 5일 +${rnd(usd,2)}%`); } else if (usd <= -0.8) { marketScore += 2; reasons.push(`달러지수 5일 ${rnd(usd,2)}%`); } }
   const oil = seriesChangePct(data.DCOILWTICO, 5);
-  if (oil != null) { if (oil >= 7) { score -= 3; reasons.push(`WTI 5일 +${rnd(oil,1)}%`); } else if (oil >= 3) score -= 1; else if (oil <= -7) score += 1; }
-  const jpy = seriesChangePct(data.DEXJPUS, 5); // DEXJPUS = JPY per USD. 하락은 엔화 강세/캐리 청산 위험으로 보수적 처리.
-  if (jpy != null && jpy <= -1.5) { score -= 2; reasons.push(`엔화 강세 5일 ${rnd(jpy,1)}%`); }
-  // 방향을 예측하지 않고, 공식 FOMC 결정 직전에는 신규 진입에 불확실성 패널티만 줍니다.
+  if (oil != null) { if (oil >= 7) { marketScore -= 3; reasons.push(`WTI 5일 +${rnd(oil,1)}%`); } else if (oil >= 3) marketScore -= 1; else if (oil <= -7) marketScore += 1; }
+  const jpy = seriesChangePct(data.DEXJPUS, 5);
+  if (jpy != null && jpy <= -1.5) { marketScore -= 2; reasons.push(`엔화 강세 5일 ${rnd(jpy,1)}%`); }
+
+  // FOMC 일정은 데이터 공급 장애와 무관한 이벤트 리스크이므로 품질 가중치로 희석하지 않습니다.
   const fomcUtc = ['2026-09-16T18:00:00Z','2026-10-28T18:00:00Z','2026-12-09T19:00:00Z'].map(Date.parse);
-  for (const t of fomcUtc) if (asOf >= t - 12*3600000 && asOf <= t + 2*3600000) { score -= 3; reasons.push('FOMC 결정 ± 이벤트 위험'); break; }
-  const latestDates = Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null]));
-  return { score: rnd(clamp(score, -10, 10), 2), reasons, latestDates, errors, raw: { d10, d2, vix, vixCh, usd, oil, jpy } };
+  for (const t of fomcUtc) if (asOf >= t - 12*3600000 && asOf <= t + 2*3600000) { eventScore -= 3; reasons.push('FOMC 결정 ± 이벤트 위험'); break; }
+
+  const weightedMarketScore = marketScore * qualityWeight;
+  const score = clamp(weightedMarketScore + eventScore, -10, 10);
+  if (status === 'partial') reasons.push(`거시데이터 부분 사용 ${freshCount+cachedCount}/${FRED_IDS.length}`);
+  if (status === 'unavailable') reasons.push(`거시데이터 부족 ${freshCount+cachedCount}/${FRED_IDS.length}`);
+  return {
+    score: rnd(score,2), rawScore: rnd(marketScore + eventScore,2), marketScore: rnd(marketScore,2), eventScore: rnd(eventScore,2),
+    reasons, latestDates: Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null])), errors,
+    quality: { status, total: FRED_IDS.length, freshCount, cachedCount, missingCount, coverage: rnd(coverage*100,1), observedWeight: rnd(observedQualityWeight,2), weight: rnd(qualityWeight,2), confidencePenalty: rnd(confidencePenalty,1), sources },
+    raw: { d10, d2, vix, vixCh, usd, oil, jpy }
+  };
 }
 
 async function buildPredictionContext(env) {
@@ -819,7 +935,7 @@ async function getExternalContext(env, { force = false, asOf = Date.now() } = {}
   }
   const errors = [];
   const events = await getManualEvents(env);
-  const [macroR, predR, newsR] = await Promise.allSettled([buildMacroContext(asOf), buildPredictionContext(env), buildNewsContext(env)]);
+  const [macroR, predR, newsR] = await Promise.allSettled([buildMacroContext(env, asOf), buildPredictionContext(env), buildNewsContext(env)]);
   const macro = macroR.status === 'fulfilled' ? macroR.value : { score: 0, reasons: [], errors: [macroR.reason?.message || 'macro failed'] };
   const pred = predR.status === 'fulfilled' ? predR.value : { config: [], global: {score:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{score:0,reasons:[]}])) , details:[], errors:[predR.reason?.message || 'prediction failed'] };
   const news = newsR.status === 'fulfilled' ? newsR.value : { configured:false, coins:Object.fromEntries(COINS.map(c=>[c,{score:0,reasons:[],severeRisk:false,items:[]}])) , errors:[newsR.reason?.message || 'news failed'] };
@@ -835,13 +951,14 @@ async function getExternalContext(env, { force = false, asOf = Date.now() } = {}
     coins[c] = {
       total: rnd(total,2), macro: rnd(Number(macro.score)||0,2), globalPrediction: rnd(globalPrediction,2), globalManual: rnd(globalManual,2),
       news: rnd(newsScore,2), prediction: rnd(prediction,2), manual: rnd(man,2),
+      macroQuality: macro.quality || null, confidencePenalty: Number(macro.quality?.confidencePenalty)||0,
       severeRisk: !!(manual.global?.severeRisk || manual.coins?.[c]?.severeRisk || news.coins?.[c]?.severeRisk),
       reasons: [...(macro.reasons||[]), ...(pred.global?.reasons||[]), ...(manual.global?.reasons||[]), ...(pred.coins?.[c]?.reasons||[]), ...(manual.coins?.[c]?.reasons||[]), ...(news.coins?.[c]?.reasons||[])].slice(0,8)
     };
   }
   const context = {
     generatedAt: Date.now(),
-    global: { total: rnd(globalScore,2), macro: rnd(Number(macro.score)||0,2), prediction: rnd(globalPrediction,2), manual: rnd(globalManual,2), reasons:[...(macro.reasons||[]), ...(pred.global?.reasons||[]), ...(manual.global?.reasons||[])].slice(0,8) },
+    global: { total: rnd(globalScore,2), macro: rnd(Number(macro.score)||0,2), prediction: rnd(globalPrediction,2), manual: rnd(globalManual,2), macroQuality: macro.quality || null, reasons:[...(macro.reasons||[]), ...(pred.global?.reasons||[]), ...(manual.global?.reasons||[])].slice(0,8) },
     coins, macro, prediction: { configured: pred.config||[], details: pred.details||[] }, news: { configured: !!news.configured }, manualEvents: events, errors
   };
   await env.SCALPER_KV.put(CONTEXT_CACHE_KEY, JSON.stringify(context), { expirationTtl: 3600 });
@@ -850,7 +967,7 @@ async function getExternalContext(env, { force = false, asOf = Date.now() } = {}
 }
 
 function emptyExternalContext(error = null) {
-  return { generatedAt: Date.now(), global:{total:0,macro:0,prediction:0,manual:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{total:0,macro:0,globalPrediction:0,globalManual:0,news:0,prediction:0,manual:0,severeRisk:false,reasons:[]}])) , macro:{score:0,reasons:[]}, prediction:{configured:[],details:[]}, news:{configured:false}, manualEvents:[], errors:error?[error]:[] };
+  return { generatedAt: Date.now(), global:{total:0,macro:0,prediction:0,manual:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{total:0,macro:0,globalPrediction:0,globalManual:0,news:0,prediction:0,manual:0,confidencePenalty:10,severeRisk:false,reasons:[]}])) , macro:{score:0,reasons:[],quality:{status:'unavailable',total:FRED_IDS.length,freshCount:0,cachedCount:0,missingCount:FRED_IDS.length,coverage:0,weight:0,confidencePenalty:10,sources:{}}}, prediction:{configured:[],details:[]}, news:{configured:false}, manualEvents:[], errors:error?[error]:[] };
 }
 
 function contextForSymbol(context, symbol) {

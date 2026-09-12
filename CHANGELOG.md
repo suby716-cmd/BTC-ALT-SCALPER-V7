@@ -1,3 +1,13 @@
+# CHANGELOG
+
+## v8.1.2
+- FRED 공식 API(FRED_API_KEY 선택) → CSV → KV 최근 정상 캐시 fallback 추가
+- Macro 데이터 품질 `normal / partial / unavailable` 분류
+- 데이터 부족 시 Macro 점수 품질 가중 및 실시간 confidence 감점
+- Macro `N/A`/부분 데이터/오류 상세/series별 source 표시
+- FRED series 최근 정상값 KV cache(최대 96시간 사용) 추가
+- FOMC 이벤트 패널티는 공급 장애와 독립적으로 유지
+
 # v8.1.1
 
 - FIX: v8.1.0 웹 대시보드에서 누락된 보유/장부 동기화 함수 5개 복구.
