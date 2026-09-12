@@ -1,8 +1,10 @@
-const VERSION = 'v8.0.0';
+const VERSION = 'v8.0.3';
 const STRATEGY_VERSION = 'krw-5m-v8';
-const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO'];
+const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
+const TRADE_HISTORY_KEY = 'trade-history:v1';
+const MAX_TRADE_HISTORY = 300;
 const LAST_RESULT_KEY = 'runtime:last-result';
 const LAST_ERROR_KEY = 'runtime:last-error';
 const FIVE_MIN = 5 * 60 * 1000;
@@ -26,6 +28,7 @@ export default {
         telegramConfigured: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
+        coins: COINS,
         note: 'Telegram 자동 신호는 Cron에서만 발송됩니다. /scan은 조회 전용입니다.'
       });
     }
@@ -48,12 +51,66 @@ export default {
       if (action === 'add') {
         const entry = Number(body.entry);
         if (!Number.isFinite(entry) || entry <= 0) return json({ ok: false, error: '실제 매수가(KRW)를 입력하세요.' }, 400);
-        positions[symbol] = { entry, addedAt: Date.now() };
+        const old = positions[symbol] || {};
+        const quantityRaw = body.quantity == null || body.quantity === '' ? old.quantity : Number(body.quantity);
+        const quantity = Number.isFinite(Number(quantityRaw)) && Number(quantityRaw) > 0 ? Number(quantityRaw) : null;
+        if (body.quantity != null && body.quantity !== '' && quantity == null) return json({ ok: false, error: '올바른 보유 수량을 입력하세요.' }, 400);
+        positions[symbol] = {
+          entry,
+          quantity,
+          addedAt: Number(old.addedAt) || Number(body.boughtAt) || Date.now(),
+          updatedAt: Date.now()
+        };
       } else {
         delete positions[symbol];
       }
       await env.SCALPER_KV.put(POS_KEY, JSON.stringify(positions));
       return json({ ok: true, held: Object.keys(positions), positions });
+    }
+
+    if (req.method === 'POST' && u.pathname === '/trade') {
+      requireKV(env);
+      const body = await readJson(req);
+      const action = String(body.action || '').toLowerCase();
+      const symbol = normalizeSymbol(body.symbol);
+      if (!COINS.includes(symbol)) return json({ ok: false, error: '지원하지 않는 코인입니다.' }, 400);
+      const history = await getTradeHistory(env);
+
+      if (action === 'manual') {
+        const entry = positiveNumber(body.entry);
+        const exit = positiveNumber(body.exit);
+        const quantity = positiveNumber(body.quantity);
+        if (!entry || !exit || !quantity) return json({ ok: false, error: '매수가, 매도가, 수량을 모두 올바르게 입력하세요.' }, 400);
+        const trade = makeClosedTrade({ symbol, entry, exit, quantity, boughtAt: Number(body.boughtAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'manual' });
+        history.unshift(trade);
+        await saveTradeHistory(env, history);
+        return json({ ok: true, trade, ...(await buildLedger(env)) });
+      }
+
+      if (action === 'sell') {
+        const positions = await getPositions(env);
+        const pos = positions[symbol];
+        if (!pos) return json({ ok: false, error: `${symbol}/KRW가 보유 상태로 등록되어 있지 않습니다.` }, 400);
+        const exit = positiveNumber(body.exit);
+        const quantity = positiveNumber(body.quantity);
+        if (!exit || !quantity) return json({ ok: false, error: '실제 매도가와 매도 수량을 입력하세요.' }, 400);
+        const heldQty = positiveNumber(pos.quantity);
+        if (heldQty && quantity > heldQty + 1e-12) return json({ ok: false, error: `매도 수량이 보유 수량(${heldQty})보다 큽니다.` }, 400);
+        const trade = makeClosedTrade({ symbol, entry: Number(pos.entry), exit, quantity, boughtAt: Number(pos.addedAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'position' });
+        history.unshift(trade);
+        if (heldQty && quantity < heldQty - 1e-12) {
+          positions[symbol] = { ...pos, quantity: heldQty - quantity, updatedAt: Date.now() };
+        } else {
+          delete positions[symbol];
+        }
+        await Promise.all([
+          env.SCALPER_KV.put(POS_KEY, JSON.stringify(positions)),
+          saveTradeHistory(env, history)
+        ]);
+        return json({ ok: true, trade, ...(await buildLedger(env)) });
+      }
+
+      return json({ ok: false, error: '지원하지 않는 거래 작업입니다.' }, 400);
     }
 
     if (req.method === 'POST' && u.pathname === '/positions') {
@@ -62,13 +119,25 @@ export default {
       return json({ ok: true, held: Object.keys(positions), positions });
     }
 
+    if (req.method === 'POST' && u.pathname === '/ledger') {
+      requireKV(env);
+      return json({ ok: true, ...(await buildLedger(env)) });
+    }
+
     if (req.method === 'POST' && u.pathname === '/status') {
       requireKV(env);
-      const [raw, errRaw] = await Promise.all([env.SCALPER_KV.get(LAST_RESULT_KEY), env.SCALPER_KV.get(LAST_ERROR_KEY)]);
+      const [raw, errRaw, positions] = await Promise.all([
+        env.SCALPER_KV.get(LAST_RESULT_KEY),
+        env.SCALPER_KV.get(LAST_ERROR_KEY),
+        getPositions(env)
+      ]);
       let lastError = null;
       try { lastError = errRaw ? JSON.parse(errRaw) : null; } catch {}
-      if (!raw) return json({ ok: true, ready: false, lastError, message: '아직 Cron 스캔 결과가 저장되지 않았습니다.' });
-      try { return json({ ok: true, ready: true, ...JSON.parse(raw), lastError }); }
+      if (!raw) return json({ ok: true, ready: false, lastError, held: Object.keys(positions), positions, message: '아직 Cron 스캔 결과가 저장되지 않았습니다.' });
+      try {
+        const saved = JSON.parse(raw);
+        return json({ ok: true, ready: true, ...applyLivePositions(saved, positions, strategyConfig(env)), lastError });
+      }
       catch { return json({ ok: false, error: '저장된 상태 데이터를 읽지 못했습니다.' }, 500); }
     }
 
@@ -355,6 +424,149 @@ async function getPositions(env) {
   } catch { return {}; }
 }
 
+function positiveNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+async function getTradeHistory(env) {
+  if (!env.SCALPER_KV) return [];
+  const raw = await env.SCALPER_KV.get(TRADE_HISTORY_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_TRADE_HISTORY) : [];
+  } catch { return []; }
+}
+
+async function saveTradeHistory(env, history) {
+  await env.SCALPER_KV.put(TRADE_HISTORY_KEY, JSON.stringify((history || []).slice(0, MAX_TRADE_HISTORY)));
+}
+
+function makeClosedTrade({ symbol, entry, exit, quantity, boughtAt = null, soldAt = Date.now(), source = 'manual' }) {
+  const buyAmount = entry * quantity;
+  const sellAmount = exit * quantity;
+  const pnl = sellAmount - buyAmount;
+  const pnlPct = entry ? (exit / entry - 1) * 100 : 0;
+  return {
+    id: `${soldAt}-${symbol}-${Math.random().toString(36).slice(2, 9)}`,
+    symbol,
+    entry: rnd(entry, 8),
+    exit: rnd(exit, 8),
+    quantity: rnd(quantity, 12),
+    buyAmount: rnd(buyAmount, 4),
+    sellAmount: rnd(sellAmount, 4),
+    pnl: rnd(pnl, 4),
+    pnlPct: rnd(pnlPct),
+    boughtAt,
+    soldAt,
+    source
+  };
+}
+
+function applyLivePositions(snapshot, positions, cfg) {
+  const results = (snapshot?.results || []).map(row => {
+    const s = { ...row };
+    const pos = positions[s.symbol];
+    if (!Number.isFinite(Number(s.score))) {
+      s.held = !!pos;
+      if (pos) { s.entry = pos.entry; s.quantity = pos.quantity ?? null; }
+      return s;
+    }
+    if (pos) {
+      const q = sellCheck(s, pos, cfg);
+      s.held = true;
+      s.entry = pos.entry;
+      s.quantity = pos.quantity ?? null;
+      s.gain = q.gain;
+      s.sell = q.sell;
+      s.sellReasons = q.reasons;
+    } else {
+      s.held = false;
+      s.entry = null;
+      s.quantity = null;
+      s.gain = null;
+      s.sell = false;
+      s.sellReasons = [];
+    }
+    return s;
+  });
+  return {
+    ...snapshot,
+    held: Object.keys(positions),
+    positions,
+    sellSignals: results.filter(x => x.sell).map(x => x.symbol),
+    results
+  };
+}
+
+async function buildLedger(env) {
+  const [positions, history, raw] = await Promise.all([
+    getPositions(env),
+    getTradeHistory(env),
+    env.SCALPER_KV.get(LAST_RESULT_KEY)
+  ]);
+  let latest = null;
+  try { latest = raw ? JSON.parse(raw) : null; } catch {}
+  const latestPrices = {};
+  for (const row of latest?.results || []) {
+    if (row?.symbol && Number.isFinite(Number(row.price))) latestPrices[row.symbol] = Number(row.price);
+  }
+
+  let openCost = 0, openValue = 0, unrealizedPnl = 0, knownOpen = 0, unknownQty = 0;
+  const open = Object.entries(positions).map(([symbol, pos]) => {
+    const entry = Number(pos.entry);
+    const quantity = positiveNumber(pos.quantity);
+    const current = positiveNumber(latestPrices[symbol]);
+    const cost = quantity ? entry * quantity : null;
+    const value = quantity && current ? current * quantity : null;
+    const pnl = cost != null && value != null ? value - cost : null;
+    const pnlPct = current && entry ? (current / entry - 1) * 100 : null;
+    if (cost != null && value != null) {
+      openCost += cost; openValue += value; unrealizedPnl += pnl; knownOpen++;
+    } else if (!quantity) unknownQty++;
+    return {
+      symbol,
+      entry,
+      quantity: quantity ?? null,
+      addedAt: Number(pos.addedAt) || null,
+      current: current ?? null,
+      cost: cost == null ? null : rnd(cost, 4),
+      value: value == null ? null : rnd(value, 4),
+      pnl: pnl == null ? null : rnd(pnl, 4),
+      pnlPct: pnlPct == null ? null : rnd(pnlPct)
+    };
+  });
+
+  const realizedPnl = history.reduce((a, x) => a + (Number(x.pnl) || 0), 0);
+  const realizedBuy = history.reduce((a, x) => a + (Number(x.buyAmount) || 0), 0);
+  const realizedSell = history.reduce((a, x) => a + (Number(x.sellAmount) || 0), 0);
+  const wins = history.filter(x => Number(x.pnl) > 0).length;
+  return {
+    positions,
+    held: Object.keys(positions),
+    open,
+    history,
+    latestPrices,
+    summary: {
+      openCount: open.length,
+      knownOpen,
+      unknownQty,
+      openCost: rnd(openCost, 4),
+      openValue: rnd(openValue, 4),
+      unrealizedPnl: rnd(unrealizedPnl, 4),
+      unrealizedPct: openCost ? rnd(unrealizedPnl / openCost * 100) : 0,
+      realizedPnl: rnd(realizedPnl, 4),
+      realizedBuy: rnd(realizedBuy, 4),
+      realizedSell: rnd(realizedSell, 4),
+      closedTrades: history.length,
+      wins,
+      winRate: history.length ? rnd(wins / history.length * 100) : 0
+    },
+    note: '장부 손익은 거래소 수수료를 제외한 단순 매수가/매도가 기준입니다.'
+  };
+}
+
 async function shouldNotify(env, type, symbol, candleStart, cooldownMs) {
   const key = `last:${type}:${symbol}`;
   // v7의 ETHUSDT 형태 cooldown key도 한 번 읽어 업그레이드 직후 중복 알림을 줄입니다.
@@ -402,6 +614,7 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
       const q = sellCheck(s, positions[s.symbol], cfg);
       s.held = true;
       s.entry = positions[s.symbol].entry;
+      s.quantity = positions[s.symbol].quantity ?? null;
       s.gain = q.gain;
       s.sell = q.sell;
       s.sellReasons = q.reasons;
@@ -481,7 +694,7 @@ function formatBuy(s, cfg) {
 }
 
 function formatSell(s) {
-  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nScore: ${s.score}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
+  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nScore: ${s.score}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
 }
 
 function fmt(x) {
