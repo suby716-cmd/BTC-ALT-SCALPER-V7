@@ -1,5 +1,5 @@
-const VERSION = 'v8.1.0';
-const STRATEGY_VERSION = 'krw-5m-v8.1-context';
+const VERSION = 'v8.1.1';
+const STRATEGY_VERSION = 'krw-5m-v8.1.1-context';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';

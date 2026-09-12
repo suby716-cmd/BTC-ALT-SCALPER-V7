@@ -1,3 +1,10 @@
+# v8.1.1
+
+- FIX: v8.1.0 웹 대시보드에서 누락된 보유/장부 동기화 함수 5개 복구.
+- FIX: 초기 로딩 `syncPositions is not defined`로 상단이 `연결 확인 필요`가 되던 문제 수정.
+- FIX: Cron 상태/장부 버튼의 연쇄 ReferenceError 수정.
+- KEEP: v8.1 Context/Macro/Prediction/Manual event, 12개 코인, SCALPER_KV 고정 binding 유지.
+
 # Changelog
 
 ## v8.1.0

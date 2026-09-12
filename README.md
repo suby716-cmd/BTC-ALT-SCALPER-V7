@@ -1,9 +1,16 @@
-# BTC ALT SCALPER v8.1.0
+# BTC ALT SCALPER v8.1.1
 
 Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
 
 > 이 프로젝트는 주문을 자동 실행하지 않습니다. Telegram 알림을 바탕으로 사용자가 직접 판단하는 수동매매 보조 도구입니다.
 
+
+## v8.1.1 웹 연결 상태 긴급 수정
+
+- v8.1.0 웹 대시보드에서 보유/장부 동기화 함수가 누락되어 초기 로딩 시 `syncPositions is not defined`가 발생하던 문제를 수정했습니다.
+- 복구 함수: `applyHeldState`, `syncPositions`, `renderLedger`, `loadLedger`, `registerPosition`.
+- Worker/KV/Telegram은 정상 연결되어 있었지만 웹 상단이 `연결 확인 필요`로 표시되고 Cron 상태/장부가 렌더링되지 않던 증상을 해결합니다.
+- v8.1 Context/Macro/Prediction/Manual event 및 12개 코인 감시는 그대로 유지합니다.
 
 ## v8.1 외부 컨텍스트 연구 레이어
 

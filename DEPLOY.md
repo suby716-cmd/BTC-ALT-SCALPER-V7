@@ -100,7 +100,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.1.0",
+  "version": "v8.1.1",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -142,7 +142,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 보유 체크 시 실제 진입가(KRW)를 입력해야 합니다. SELL 검토 알림의 손익 계산은 이 값을 사용합니다.
 
-## v8.1.0 장부·기기 동기화 확인
+## v8.1.1 장부·기기 동기화 확인
 
 배포 후 GitHub Pages의 **보유 · 매매 장부**에서 다음을 확인합니다.
 
@@ -159,9 +159,9 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 보유/매매 데이터는 Cloudflare KV에 저장되어 기기 간 공유됩니다. Worker URL/PIN은 각 브라우저 로컬 저장이므로 새 기기에서는 다시 입력해야 합니다. Cloudflare KV는 전 세계 엣지에 전파되는 저장소라 아주 짧은 동기화 지연이 생길 수 있습니다.
 
-장부 손익은 v8.1.0에서는 거래소 수수료 제외 기준입니다.
+장부 손익은 v8.1.1에서는 거래소 수수료 제외 기준입니다.
 
-## v8.1.0 백테스트 확인
+## v8.1.1 백테스트 확인
 
 배포 후 백테스트 영역에서 다음 순서로 확인합니다.
 
@@ -205,7 +205,7 @@ CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
 
 이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
 
-`/health`에서 v8.1.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+`/health`에서 v8.1.1, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
 
 ### Polymarket
 
