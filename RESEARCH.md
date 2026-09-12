@@ -17,14 +17,13 @@
 
 ## 자동 Macro 프록시
 
-FRED 공개 CSV를 사용해 다음 시계열을 저가중치로 계산한다.
+FRED를 거치지 않고 공식 공개 원천을 직접 사용해 다음 지표를 저가중치로 계산한다.
 
-- DGS10: 미국 10년 국채 수익률
-- DGS2: 미국 2년 국채 수익률
-- VIXCLS: VIX
-- DTWEXBGS: 광의 달러지수
-- DCOILWTICO: WTI
-- DEXJPUS: USD/JPY
+- U.S. Treasury Daily Yield Curve: 미국 10년·2년 국채 수익률
+- Cboe: VIX, OVX(원유 변동성)
+- Federal Reserve Board H.10: Nominal Broad Dollar Index, USD/JPY
+- EIA: Cushing WTI Spot Price
+- BLS Public Data API v1: CPI, 실업률
 
 일간 지표이므로 5분 기술 신호보다 느리고, 절대적인 매수/매도 근거가 아니라 배경 레짐 필터다.
 
@@ -43,6 +42,8 @@ FRED 공개 CSV를 사용해 다음 시계열을 저가중치로 계산한다.
 - 법안 통과나 FOMC 결과를 미리 확정적인 +/−로 해석: 미지원. 확률/시장반응과 함께 판단한다.
 
 
-## v8.1.2 데이터 품질 원칙
+## v8.1.3 데이터 품질 원칙
 
-거시 데이터 결측을 0점 중립으로 오인하지 않습니다. 6개 Macro series의 fresh/cache/missing 비율을 기록하고, 부분 데이터는 점수 가중치를 낮추며 실시간 confidence에 penalty를 적용합니다. 과거 캐시는 최대 96시간만 허용하고 화면에 CACHE 사용 여부와 나이를 표시합니다.
+거시 데이터 결측을 0점 중립으로 오인하지 않습니다. 9개 Macro metric의 LIVE/CACHE/missing 비율을 기록하고, 부분 데이터는 점수 가중치를 낮추며 실시간 confidence에 penalty를 적용합니다.
+
+공급자는 `Treasury / Federal Reserve Board / Cboe / BLS / EIA`로 분리합니다. 한 공급자 장애가 전체 Macro를 무효화하지 않도록 공급자별 캐시를 독립적으로 유지합니다. CPI·실업률처럼 월간 발표 주기가 긴 자료는 더 긴 캐시 유효기간을 허용하고, 국채·VIX·WTI처럼 일간 자료는 더 짧게 허용합니다.

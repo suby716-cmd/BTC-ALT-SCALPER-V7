@@ -1,4 +1,4 @@
-# BTC ALT SCALPER v8.1.2
+# BTC ALT SCALPER v8.1.3
 
 Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
 
@@ -13,20 +13,26 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - v8.1 Context/Macro/Prediction/Manual event 및 12개 코인 감시는 그대로 유지합니다.
 
 
-## v8.1.2 Macro 안정화
+## v8.1.3 공개 원천 Macro
 
-- FRED 거시지표 수집을 **공식 API(FRED_API_KEY 설정 시) → 기존 CSV → KV 최근 정상 캐시** 순으로 다중화했습니다.
-- 6개 지표 각각의 소스를 `API / CSV / CACHE / 실패`로 표시합니다.
-- Macro 데이터가 부족한데 `+0.00`으로 정상 중립처럼 보이던 문제를 수정하여 `정상 / 부분 데이터 / 사용불가(N/A)`를 구분합니다.
-- 부분/사용불가 상태에서는 외부 거시 점수를 품질 비율만큼 축소하고 실시간 신뢰도에 보수적 감점을 적용합니다.
-- FOMC 이벤트 창 패널티는 데이터 공급 장애와 무관하므로 별도로 유지합니다.
-- `FRED_API_KEY`는 선택 Secret이며 GitHub에 절대 기록하지 않습니다. 키가 없어도 CSV와 최근 정상 캐시 fallback은 작동합니다.
+FRED 의존을 제거하고 **미국 정부·공식 거래소의 공개 원천자료**를 직접 읽도록 바꿨습니다. 별도 Macro API Key가 필요하지 않습니다.
+
+- **U.S. Treasury**: Daily Treasury Par Yield Curve XML에서 2Y·10Y 국채수익률
+- **Federal Reserve Board H.10**: Nominal Broad Dollar Index와 USD/JPY
+- **Cboe**: VIX와 OVX(원유 변동성)
+- **BLS Public Data API v1**: CPI와 실업률
+- **EIA**: Cushing WTI 현물가격
+- 공급자별로 독립 수집하여, 예를 들어 Cboe만 실패해도 Treasury/Fed/BLS/EIA 자료는 계속 사용합니다.
+- 각 공개 원천이 실패하면 **공급자별 최근 정상 KV 캐시**를 사용하며, 캐시/누락 비율에 따라 Macro 점수와 신뢰도를 보수적으로 낮춥니다.
+- 대시보드에 각 지표의 `LIVE / CACHE / 실패`와 원 출처를 표시합니다.
+- Macro가 충분히 확보되지 않으면 `+0.00` 중립으로 위장하지 않고 `부분 데이터` 또는 `N/A`로 표시합니다.
+- FOMC 이벤트 위험 패널티는 외부 데이터 공급 장애와 독립적으로 유지합니다.
 
 ## v8.1 외부 컨텍스트 연구 레이어
 
 기술적 Score는 그대로 유지하고, 외부 환경을 별도 Context Score로 계산합니다. **외부 호재만으로 BUY를 만들지 않으며 기술적 진입 조건은 반드시 통과해야 합니다.**
 
-- 자동 거시 프록시: FRED의 미 10Y/2Y 금리, VIX, 광의 달러지수, WTI, USD/JPY 변화
+- 자동 거시 프록시: Treasury 10Y/2Y, Cboe VIX·OVX, Fed Broad Dollar·USD/JPY, EIA WTI, BLS CPI·실업률
 - FOMC 이벤트 창: 방향을 예측하지 않고 발표 전후 신규진입 불확실성 패널티
 - Polymarket: 사용자가 등록한 시장 ID의 확률을 가중치 점수로 반영
 - 수동 이벤트: CLARITY 법안, Treasury buyback, 전쟁/휴전, ETF, 파트너십, 규제, 해킹 등 +10~-10과 만료시간으로 등록
@@ -99,7 +105,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.2입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.3입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets

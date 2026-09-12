@@ -1,5 +1,5 @@
-const VERSION = 'v8.1.2';
-const STRATEGY_VERSION = 'krw-5m-v8.1.2-context';
+const VERSION = 'v8.1.3';
+const STRATEGY_VERSION = 'krw-5m-v8.1.3-public-macro';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
@@ -12,12 +12,28 @@ const MANUAL_EVENTS_KEY = 'context:manual-events:v1';
 const PREDICTION_CONFIG_KEY = 'context:prediction-config:v1';
 const CONTEXT_CACHE_MS = 15 * 60 * 1000;
 const CONTEXT_HISTORY_TTL = 120 * 24 * 60 * 60;
-const FRED_SERIES_CACHE_KEY = 'macro:fred-cache:v1';
-const FRED_SERIES_CACHE_TTL = 14 * 24 * 60 * 60;
-const FRED_SERIES_MAX_STALE_MS = 96 * 60 * 60 * 1000;
-const FRED_FETCH_TIMEOUT_MS = 9000;
-const FRED_IDS = ['DGS10','DGS2','VIXCLS','DTWEXBGS','DCOILWTICO','DEXJPUS'];
-const FRED_LABELS = { DGS10:'미10Y', DGS2:'미2Y', VIXCLS:'VIX', DTWEXBGS:'광의달러', DCOILWTICO:'WTI', DEXJPUS:'USD/JPY' };
+const MACRO_PROVIDER_CACHE_KEY = 'macro:public-provider-cache:v1';
+const MACRO_PROVIDER_CACHE_TTL = 60 * 24 * 60 * 60;
+const MACRO_FETCH_TIMEOUT_MS = 10000;
+const MACRO_METRICS = {
+  US10Y: { label:'미10Y', provider:'U.S. Treasury' },
+  US2Y: { label:'미2Y', provider:'U.S. Treasury' },
+  VIX: { label:'VIX', provider:'Cboe' },
+  BROAD_USD: { label:'광의달러', provider:'Federal Reserve Board' },
+  WTI: { label:'WTI', provider:'EIA' },
+  USDJPY: { label:'USD/JPY', provider:'Federal Reserve Board' },
+  OVX: { label:'OVX', provider:'Cboe' },
+  CPI: { label:'CPI', provider:'BLS' },
+  UNRATE: { label:'실업률', provider:'BLS' }
+};
+const MACRO_METRIC_IDS = Object.keys(MACRO_METRICS);
+const MACRO_PROVIDER_STALE_MS = {
+  treasury: 5 * 24 * 60 * 60 * 1000,
+  federalreserve: 14 * 24 * 60 * 60 * 1000,
+  cboe: 5 * 24 * 60 * 60 * 1000,
+  bls: 45 * 24 * 60 * 60 * 1000,
+  eia: 7 * 24 * 60 * 60 * 1000
+};
 const FIVE_MIN = 5 * 60 * 1000;
 const FIFTEEN_MIN = 15 * 60 * 1000;
 
@@ -40,7 +56,7 @@ export default {
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
         coins: COINS,
-        externalContext: { fredMacro: true, fredApiKeyConfigured: !!env.FRED_API_KEY, polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
+        externalContext: { publicMacro: true, macroProviders: ['U.S. Treasury','Federal Reserve Board','Cboe','BLS','EIA'], polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
         note: 'Telegram 자동 신호는 Cron에서만 발송됩니다. /scan은 조회 전용입니다.'
       });
     }
@@ -665,99 +681,182 @@ async function getPredictionConfig(env) {
   } catch { return []; }
 }
 
-function parseFredCsv(text) {
-  const lines = String(text || '').trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const out = [];
-  for (const line of lines.slice(1)) {
-    const parts = line.split(',');
-    if (parts.length < 2) continue;
-    const v = Number(parts[1]);
-    if (Number.isFinite(v)) out.push({ date: parts[0], value: v });
-  }
-  return out;
-}
-
 function isoDate(ms) {
   return new Date(ms).toISOString().slice(0,10);
 }
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = FRED_FETCH_TIMEOUT_MS) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = MACRO_FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try { return await fetch(url, { ...options, signal: controller.signal }); }
   finally { clearTimeout(timer); }
 }
 
-function parseFredApiJson(data) {
+function cleanHtmlCell(s) {
+  return String(s || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&minus;|&#8722;/gi, '-')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseTreasuryYieldXml(xml) {
+  const y2 = [], y10 = [];
+  const entries = String(xml || '').match(/<entry\b[\s\S]*?<\/entry>/gi) || [];
+  for (const entry of entries) {
+    const date = entry.match(/<d:NEW_DATE[^>]*>([^<]+)<\/d:NEW_DATE>/i)?.[1]?.slice(0,10);
+    const a = Number(entry.match(/<d:BC_2YEAR[^>]*>([^<]+)<\/d:BC_2YEAR>/i)?.[1]);
+    const b = Number(entry.match(/<d:BC_10YEAR[^>]*>([^<]+)<\/d:BC_10YEAR>/i)?.[1]);
+    if (date && Number.isFinite(a)) y2.push({ date, value:a });
+    if (date && Number.isFinite(b)) y10.push({ date, value:b });
+  }
+  if (y2.length < 2 || y10.length < 2) throw new Error('Treasury XML 2Y/10Y 데이터 부족');
+  return { US2Y:y2.slice(-45), US10Y:y10.slice(-45) };
+}
+
+async function fetchTreasuryProvider(asOf = Date.now()) {
+  const year = new Date(asOf).getUTCFullYear();
+  const q = new URLSearchParams({ data:'daily_treasury_yield_curve', field_tdr_date_value:String(year) });
+  const r = await fetchWithTimeout(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?${q.toString()}`, { headers:{ accept:'application/xml,text/xml;q=0.9,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  if (!r.ok) throw new Error(`Treasury ${r.status}`);
+  return parseTreasuryYieldXml(await r.text());
+}
+
+function parseFedHistoricalRateHtml(html) {
+  const plain = cleanHtmlCell(html).toUpperCase();
   const out = [];
-  for (const row of (data?.observations || [])) {
-    const v = Number(row?.value);
-    if (Number.isFinite(v)) out.push({ date: row.date, value: v });
+  const re = /(\d{1,2}-[A-Z]{3}-\d{2,4})\s+(ND|[-+]?\d+(?:\.\d+)?)/g;
+  let m;
+  while ((m = re.exec(plain))) {
+    const v = Number(m[2]);
+    if (Number.isFinite(v)) out.push({ date:m[1], value:v });
+  }
+  if (out.length < 5) throw new Error('Federal Reserve H.10 데이터 부족');
+  return out.slice(-45);
+}
+
+async function fetchFederalReserveSeries(id, url) {
+  const r = await fetchWithTimeout(url, { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  if (!r.ok) throw new Error(`${id} ${r.status}`);
+  return { [id]:parseFedHistoricalRateHtml(await r.text()) };
+}
+
+function parseCboeCsv(text) {
+  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 3) throw new Error('Cboe CSV 데이터 부족');
+  const head = lines[0].split(',').map(x => x.trim().replace(/^"|"$/g,'').toUpperCase());
+  const dateIdx = head.indexOf('DATE');
+  const closeIdx = head.indexOf('CLOSE');
+  if (dateIdx < 0 || closeIdx < 0) throw new Error('Cboe CSV 형식 변경');
+  const out = [];
+  for (const line of lines.slice(1)) {
+    const parts = line.split(',').map(x => x.trim().replace(/^"|"$/g,''));
+    const v = Number(parts[closeIdx]);
+    if (parts[dateIdx] && Number.isFinite(v)) out.push({ date:parts[dateIdx], value:v });
+  }
+  if (out.length < 5) throw new Error('Cboe CSV 유효 데이터 부족');
+  return out.slice(-45);
+}
+
+async function fetchCboeSeries(id, url) {
+  const r = await fetchWithTimeout(url, { headers:{ accept:'text/csv,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  if (!r.ok) throw new Error(`${id} ${r.status}`);
+  return { [id]:parseCboeCsv(await r.text()) };
+}
+
+function parseBlsSeries(data) {
+  const out = {};
+  for (const s of (data?.Results?.series || [])) {
+    const rows = [];
+    for (const x of (s.data || [])) {
+      if (!/^M(0[1-9]|1[0-2])$/.test(String(x.period || ''))) continue;
+      const v = Number(x.value);
+      if (!Number.isFinite(v)) continue;
+      rows.push({ date:`${x.year}-${String(x.period).slice(1)}`, value:v, year:Number(x.year), month:Number(String(x.period).slice(1)) });
+    }
+    rows.sort((a,b) => (a.year*12+a.month) - (b.year*12+b.month));
+    out[s.seriesID] = rows;
   }
   return out;
 }
 
-async function fredSeriesViaApi(env, id, asOf = Date.now()) {
-  if (!env.FRED_API_KEY) throw new Error('FRED_API_KEY 미설정');
-  const start = isoDate(asOf - 90 * 24 * 60 * 60 * 1000);
-  const q = new URLSearchParams({
-    series_id: id, api_key: env.FRED_API_KEY, file_type: 'json',
-    observation_start: start, sort_order: 'asc'
+async function fetchBlsProvider(asOf = Date.now()) {
+  const year = new Date(asOf).getUTCFullYear();
+  const body = { seriesid:['CUSR0000SA0','LNS14000000'], startyear:String(year-2), endyear:String(year) };
+  const r = await fetchWithTimeout('https://api.bls.gov/publicAPI/v1/timeseries/data/', {
+    method:'POST', headers:{ 'content-type':'application/json', accept:'application/json', 'user-agent':'BTC-ALT-SCALPER/8.1.3' }, body:JSON.stringify(body)
   });
-  const r = await fetchWithTimeout(`https://api.stlouisfed.org/fred/series/observations?${q.toString()}`, { headers: { accept: 'application/json' } });
-  if (!r.ok) throw new Error(`FRED API ${id} ${r.status}`);
-  const rows = parseFredApiJson(await r.json());
-  if (rows.length < 2) throw new Error(`FRED API ${id} 데이터 부족`);
-  return rows;
+  if (!r.ok) throw new Error(`BLS ${r.status}`);
+  const d = await r.json();
+  if (d?.status && d.status !== 'REQUEST_SUCCEEDED') throw new Error(`BLS ${d.status}`);
+  const p = parseBlsSeries(d);
+  const cpi = p.CUSR0000SA0 || [], un = p.LNS14000000 || [];
+  if (cpi.length < 13 || un.length < 4) throw new Error('BLS CPI/실업률 데이터 부족');
+  return { CPI:cpi.slice(-30), UNRATE:un.slice(-30) };
 }
 
-async function fredSeriesViaCsv(id) {
-  const r = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}`, { headers: { accept: 'text/csv' } });
-  if (!r.ok) throw new Error(`FRED CSV ${id} ${r.status}`);
-  const rows = parseFredCsv(await r.text());
-  if (rows.length < 2) throw new Error(`FRED CSV ${id} 데이터 부족`);
-  return rows;
+function parseEiaWtiHtml(html) {
+  const out = [];
+  const tr = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  let m, seq = 0;
+  while ((m = tr.exec(String(html || '')))) {
+    const cells = [...m[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(x => cleanHtmlCell(x[1]));
+    if (cells.length < 2 || !/\b(?:19|20)\d{2}\b.*\bto\b/i.test(cells[0])) continue;
+    for (const c of cells.slice(1)) {
+      const v = Number(String(c).replace(/[$,]/g,'').trim());
+      if (Number.isFinite(v) && v > 0) out.push({ date:`EIA-${++seq}`, value:v });
+    }
+  }
+  if (out.length < 5) throw new Error('EIA WTI 데이터 부족');
+  return out.slice(-45);
 }
 
-async function readFredCacheMap(env) {
+async function fetchEiaProvider() {
+  const r = await fetchWithTimeout('https://www.eia.gov/dnav/pet/hist/RWTCD.htm', { headers:{ accept:'text/html,*/*;q=0.8', 'user-agent':'BTC-ALT-SCALPER/8.1.3' } });
+  if (!r.ok) throw new Error(`EIA WTI ${r.status}`);
+  return { WTI:parseEiaWtiHtml(await r.text()) };
+}
+
+async function readMacroProviderCache(env) {
   if (!env.SCALPER_KV) return {};
   try {
-    const raw = await env.SCALPER_KV.get(FRED_SERIES_CACHE_KEY);
+    const raw = await env.SCALPER_KV.get(MACRO_PROVIDER_CACHE_KEY);
     const x = raw ? JSON.parse(raw) : {};
     return x && typeof x === 'object' ? x : {};
   } catch { return {}; }
 }
 
-async function writeFredCacheMap(env, map) {
+async function writeMacroProviderCache(env, map) {
   if (!env.SCALPER_KV) return;
-  try {
-    await env.SCALPER_KV.put(FRED_SERIES_CACHE_KEY, JSON.stringify(map), { expirationTtl: FRED_SERIES_CACHE_TTL });
-  } catch {}
+  try { await env.SCALPER_KV.put(MACRO_PROVIDER_CACHE_KEY, JSON.stringify(map), { expirationTtl: MACRO_PROVIDER_CACHE_TTL }); }
+  catch {}
 }
 
-function usableFredCache(entry) {
-  if (!entry || !Array.isArray(entry.rows) || entry.rows.length < 2) return null;
+function usableProviderCache(entry, maxStaleMs) {
+  if (!entry || !entry.metrics || typeof entry.metrics !== 'object') return null;
   const ageMs = Date.now() - Number(entry.fetchedAt || 0);
-  if (!Number.isFinite(ageMs) || ageMs > FRED_SERIES_MAX_STALE_MS) return null;
-  return { rows: entry.rows, fetchedAt: Number(entry.fetchedAt), ageMs };
+  if (!Number.isFinite(ageMs) || ageMs > maxStaleMs) return null;
+  return { metrics:entry.metrics, fetchedAt:Number(entry.fetchedAt), ageMs };
 }
 
-async function loadFredSeries(env, id, asOf = Date.now(), cachedEntry = null) {
-  const attempts = [];
-  if (env.FRED_API_KEY) {
-    try {
-      const rows = await fredSeriesViaApi(env, id, asOf);
-      return { id, rows, source: 'api', fresh: true, errors: attempts, cacheUpdate: { fetchedAt: Date.now(), source: 'api', rows: rows.slice(-45) } };
-    } catch (e) { attempts.push(e instanceof Error ? e.message : String(e)); }
-  }
+async function loadMacroProvider(name, label, fetcher, maxStaleMs, cacheEntry, asOf) {
+  const errors = [];
   try {
-    const rows = await fredSeriesViaCsv(id);
-    return { id, rows, source: 'csv', fresh: true, errors: attempts, cacheUpdate: { fetchedAt: Date.now(), source: 'csv', rows: rows.slice(-45) } };
-  } catch (e) { attempts.push(e instanceof Error ? e.message : String(e)); }
-  const cached = usableFredCache(cachedEntry);
-  if (cached) return { id, rows: cached.rows, source: 'cache', fresh: false, cacheAgeMs: cached.ageMs, errors: attempts };
-  return { id, rows: [], source: 'missing', fresh: false, errors: attempts };
+    const metrics = await fetcher(asOf);
+    if (!metrics || !Object.keys(metrics).length) throw new Error('빈 데이터');
+    return { name, label, metrics, source:'live', fresh:true, errors, cacheUpdate:{ fetchedAt:Date.now(), metrics } };
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : String(e));
+  }
+  const cached = usableProviderCache(cacheEntry, maxStaleMs);
+  if (cached) return { name, label, metrics:cached.metrics, source:'cache', fresh:false, cacheAgeMs:cached.ageMs, errors };
+  return { name, label, metrics:{}, source:'missing', fresh:false, errors };
 }
 
 function seriesChangePct(rows, lookback = 5) {
@@ -770,63 +869,108 @@ function seriesChangeAbs(rows, lookback = 5) {
   const last = rows.at(-1)?.value, prev = rows.at(-1 - Math.min(lookback, rows.length - 1))?.value;
   return Number.isFinite(last) && Number.isFinite(prev) ? last - prev : null;
 }
+function seriesYoY(rows) {
+  if (!Array.isArray(rows) || rows.length < 13) return null;
+  const last = rows.at(-1)?.value, prev = rows.at(-13)?.value;
+  return Number.isFinite(last) && Number.isFinite(prev) && prev !== 0 ? (last / prev - 1) * 100 : null;
+}
 
 async function buildMacroContext(env, asOf = Date.now()) {
-  const cacheMap = await readFredCacheMap(env);
-  const settled = await Promise.all(FRED_IDS.map(id => loadFredSeries(env, id, asOf, cacheMap[id])));
-  const data = {};
-  const sources = {};
-  const errors = [];
+  const cacheMap = await readMacroProviderCache(env);
+  const providers = [
+    ['treasury','U.S. Treasury',fetchTreasuryProvider,MACRO_PROVIDER_STALE_MS.treasury],
+    ['frb_broad','Federal Reserve Board · Broad USD',() => fetchFederalReserveSeries('BROAD_USD','https://www.federalreserve.gov/releases/h10/summary/jrxwtfb_nb.htm'),MACRO_PROVIDER_STALE_MS.federalreserve],
+    ['frb_jpy','Federal Reserve Board · USD/JPY',() => fetchFederalReserveSeries('USDJPY','https://www.federalreserve.gov/releases/h10/hist/dat00_ja.htm'),MACRO_PROVIDER_STALE_MS.federalreserve],
+    ['cboe_vix','Cboe · VIX',() => fetchCboeSeries('VIX','https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv'),MACRO_PROVIDER_STALE_MS.cboe],
+    ['cboe_ovx','Cboe · OVX',() => fetchCboeSeries('OVX','https://cdn.cboe.com/api/global/us_indices/daily_prices/OVX_History.csv'),MACRO_PROVIDER_STALE_MS.cboe],
+    ['bls','BLS · CPI/실업률',fetchBlsProvider,MACRO_PROVIDER_STALE_MS.bls],
+    ['eia','EIA · WTI',fetchEiaProvider,MACRO_PROVIDER_STALE_MS.eia]
+  ];
+  const settled = await Promise.all(providers.map(([name,label,fn,maxStale]) => loadMacroProvider(name,label,fn,maxStale,cacheMap[name],asOf)));
+  const data = {}, sources = {}, errors = [];
   let freshCount = 0, cachedCount = 0, missingCount = 0;
-  for (const row of settled) {
-    if (row.rows?.length) data[row.id] = row.rows;
-    sources[row.id] = {
-      label: FRED_LABELS[row.id] || row.id, source: row.source,
-      latestDate: row.rows?.at(-1)?.date || null,
-      cacheAgeHours: row.source === 'cache' ? rnd((Number(row.cacheAgeMs)||0)/3600000,1) : null
-    };
-    if (row.source === 'api' || row.source === 'csv') freshCount++;
-    else if (row.source === 'cache') cachedCount++;
-    else missingCount++;
-    if (row.errors?.length) errors.push(`${row.id}: ${row.errors.join(' → ')}`);
-    if (row.cacheUpdate) cacheMap[row.id] = row.cacheUpdate;
-  }
-  if (settled.some(x => x.cacheUpdate)) await writeFredCacheMap(env, cacheMap);
 
-  const coverage = (freshCount + cachedCount) / FRED_IDS.length;
-  const observedQualityWeight = clamp((freshCount + cachedCount * 0.55) / FRED_IDS.length, 0, 1);
+  for (const p of settled) {
+    if (p.cacheUpdate) cacheMap[p.name] = p.cacheUpdate;
+    if (p.errors?.length) errors.push(`${p.label}: ${p.errors.join(' → ')}`);
+    for (const id of Object.keys(MACRO_METRICS)) {
+      if (!p.metrics?.[id]) continue;
+      data[id] = p.metrics[id];
+      const source = p.source;
+      sources[id] = {
+        label:MACRO_METRICS[id].label, provider:MACRO_METRICS[id].provider, source,
+        latestDate:p.metrics[id]?.at(-1)?.date || null,
+        cacheAgeHours:source === 'cache' ? rnd((Number(p.cacheAgeMs)||0)/3600000,1) : null
+      };
+    }
+  }
+  if (settled.some(x => x.cacheUpdate)) await writeMacroProviderCache(env, cacheMap);
+
+  for (const id of MACRO_METRIC_IDS) {
+    const src = sources[id];
+    if (!src) { missingCount++; sources[id] = { label:MACRO_METRICS[id].label, provider:MACRO_METRICS[id].provider, source:'missing', latestDate:null, cacheAgeHours:null }; }
+    else if (src.source === 'live') freshCount++;
+    else if (src.source === 'cache') cachedCount++;
+    else missingCount++;
+  }
+
+  const total = MACRO_METRIC_IDS.length;
+  const coverage = (freshCount + cachedCount) / total;
+  const observedQualityWeight = clamp((freshCount + cachedCount * 0.60) / total, 0, 1);
   const status = missingCount === 0 && cachedCount === 0 ? 'normal' : coverage >= 0.67 ? 'partial' : 'unavailable';
   const qualityWeight = status === 'unavailable' ? 0 : observedQualityWeight;
-  const confidencePenalty = status === 'normal' ? 0 : status === 'partial' ? clamp(3 + missingCount * 1.5 + cachedCount * 0.75, 3, 8) : 10;
+  const confidencePenalty = status === 'normal' ? 0 : status === 'partial' ? clamp(2 + missingCount * 1.2 + cachedCount * 0.5, 2, 8) : 10;
 
   let marketScore = 0, eventScore = 0; const reasons = [];
-  const d10 = seriesChangeAbs(data.DGS10, 5);
+  const d10 = seriesChangeAbs(data.US10Y, 5);
   if (d10 != null) { if (d10 <= -0.10) { marketScore += 2; reasons.push(`미10Y 5일 ${rnd(d10,2)}%p`); } else if (d10 >= 0.10) { marketScore -= 2; reasons.push(`미10Y 5일 +${rnd(d10,2)}%p`); } }
-  const d2 = seriesChangeAbs(data.DGS2, 5);
+  const d2 = seriesChangeAbs(data.US2Y, 5);
   if (d2 != null) { if (d2 <= -0.10) marketScore += 1; else if (d2 >= 0.10) marketScore -= 1; }
-  const vixRows = data.VIXCLS || [], vix = vixRows.at(-1)?.value, vixCh = seriesChangePct(vixRows, 5);
+
+  const vixRows = data.VIX || [], vix = vixRows.at(-1)?.value, vixCh = seriesChangePct(vixRows, 5);
   if (Number.isFinite(vix)) { if (vix >= 30) { marketScore -= 4; reasons.push(`VIX ${rnd(vix,1)} 고위험`); } else if (vix >= 24) marketScore -= 2; else if (vix <= 17) marketScore += 2; }
   if (vixCh != null) { if (vixCh >= 15) marketScore -= 2; else if (vixCh <= -15) marketScore += 1; }
-  const usd = seriesChangePct(data.DTWEXBGS, 5);
-  if (usd != null) { if (usd >= 0.8) { marketScore -= 2; reasons.push(`달러지수 5일 +${rnd(usd,2)}%`); } else if (usd <= -0.8) { marketScore += 2; reasons.push(`달러지수 5일 ${rnd(usd,2)}%`); } }
-  const oil = seriesChangePct(data.DCOILWTICO, 5);
+
+  const usd = seriesChangePct(data.BROAD_USD, 5);
+  if (usd != null) { if (usd >= 0.8) { marketScore -= 2; reasons.push(`광의달러 5일 +${rnd(usd,2)}%`); } else if (usd <= -0.8) { marketScore += 2; reasons.push(`광의달러 5일 ${rnd(usd,2)}%`); } }
+
+  const oil = seriesChangePct(data.WTI, 5);
   if (oil != null) { if (oil >= 7) { marketScore -= 3; reasons.push(`WTI 5일 +${rnd(oil,1)}%`); } else if (oil >= 3) marketScore -= 1; else if (oil <= -7) marketScore += 1; }
-  const jpy = seriesChangePct(data.DEXJPUS, 5);
+
+  const jpy = seriesChangePct(data.USDJPY, 5);
   if (jpy != null && jpy <= -1.5) { marketScore -= 2; reasons.push(`엔화 강세 5일 ${rnd(jpy,1)}%`); }
 
-  // FOMC 일정은 데이터 공급 장애와 무관한 이벤트 리스크이므로 품질 가중치로 희석하지 않습니다.
+  const ovxRows = data.OVX || [], ovx = ovxRows.at(-1)?.value, ovxCh = seriesChangePct(ovxRows, 5);
+  if (Number.isFinite(ovx)) { if (ovx >= 50) { marketScore -= 2; reasons.push(`OVX ${rnd(ovx,1)} 원유변동성 고위험`); } else if (ovx >= 40) marketScore -= 1; }
+  if (ovxCh != null && ovxCh >= 20) marketScore -= 1;
+
+  const cpiYoy = seriesYoY(data.CPI);
+  if (cpiYoy != null) {
+    if (cpiYoy >= 3.5) { marketScore -= 1.5; reasons.push(`CPI YoY ${rnd(cpiYoy,2)}%`); }
+    else if (cpiYoy >= 3.0) marketScore -= 0.5;
+    else if (cpiYoy <= 2.3) marketScore += 0.5;
+  }
+
+  const un3 = seriesChangeAbs(data.UNRATE, 3);
+  if (un3 != null) {
+    if (un3 >= 0.3) { marketScore -= 1; reasons.push(`실업률 3개월 +${rnd(un3,1)}%p`); }
+    else if (un3 <= -0.3) marketScore += 0.5;
+  }
+
+  // FOMC 일정은 외부 데이터 공급 장애와 무관한 이벤트 리스크이므로 품질 가중치로 희석하지 않습니다.
   const fomcUtc = ['2026-09-16T18:00:00Z','2026-10-28T18:00:00Z','2026-12-09T19:00:00Z'].map(Date.parse);
   for (const t of fomcUtc) if (asOf >= t - 12*3600000 && asOf <= t + 2*3600000) { eventScore -= 3; reasons.push('FOMC 결정 ± 이벤트 위험'); break; }
 
   const weightedMarketScore = marketScore * qualityWeight;
   const score = clamp(weightedMarketScore + eventScore, -10, 10);
-  if (status === 'partial') reasons.push(`거시데이터 부분 사용 ${freshCount+cachedCount}/${FRED_IDS.length}`);
-  if (status === 'unavailable') reasons.push(`거시데이터 부족 ${freshCount+cachedCount}/${FRED_IDS.length}`);
+  if (status === 'partial') reasons.push(`공개 거시데이터 부분 사용 ${freshCount+cachedCount}/${total}`);
+  if (status === 'unavailable') reasons.push(`공개 거시데이터 부족 ${freshCount+cachedCount}/${total}`);
+
   return {
-    score: rnd(score,2), rawScore: rnd(marketScore + eventScore,2), marketScore: rnd(marketScore,2), eventScore: rnd(eventScore,2),
-    reasons, latestDates: Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null])), errors,
-    quality: { status, total: FRED_IDS.length, freshCount, cachedCount, missingCount, coverage: rnd(coverage*100,1), observedWeight: rnd(observedQualityWeight,2), weight: rnd(qualityWeight,2), confidencePenalty: rnd(confidencePenalty,1), sources },
-    raw: { d10, d2, vix, vixCh, usd, oil, jpy }
+    score:rnd(score,2), rawScore:rnd(marketScore + eventScore,2), marketScore:rnd(marketScore,2), eventScore:rnd(eventScore,2),
+    reasons, latestDates:Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.at(-1)?.date || null])), errors,
+    quality:{ status, total, freshCount, cachedCount, missingCount, coverage:rnd(coverage*100,1), observedWeight:rnd(observedQualityWeight,2), weight:rnd(qualityWeight,2), confidencePenalty:rnd(confidencePenalty,1), sources },
+    raw:{ d10, d2, vix, vixCh, usd, oil, jpy, ovx, ovxCh, cpiYoy, un3 }
   };
 }
 
@@ -967,7 +1111,7 @@ async function getExternalContext(env, { force = false, asOf = Date.now() } = {}
 }
 
 function emptyExternalContext(error = null) {
-  return { generatedAt: Date.now(), global:{total:0,macro:0,prediction:0,manual:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{total:0,macro:0,globalPrediction:0,globalManual:0,news:0,prediction:0,manual:0,confidencePenalty:10,severeRisk:false,reasons:[]}])) , macro:{score:0,reasons:[],quality:{status:'unavailable',total:FRED_IDS.length,freshCount:0,cachedCount:0,missingCount:FRED_IDS.length,coverage:0,weight:0,confidencePenalty:10,sources:{}}}, prediction:{configured:[],details:[]}, news:{configured:false}, manualEvents:[], errors:error?[error]:[] };
+  return { generatedAt: Date.now(), global:{total:0,macro:0,prediction:0,manual:0,reasons:[]}, coins:Object.fromEntries(COINS.map(c=>[c,{total:0,macro:0,globalPrediction:0,globalManual:0,news:0,prediction:0,manual:0,confidencePenalty:10,severeRisk:false,reasons:[]}])) , macro:{score:0,reasons:[],quality:{status:'unavailable',total:MACRO_METRIC_IDS.length,freshCount:0,cachedCount:0,missingCount:MACRO_METRIC_IDS.length,coverage:0,weight:0,confidencePenalty:10,sources:{}}}, prediction:{configured:[],details:[]}, news:{configured:false}, manualEvents:[], errors:error?[error]:[] };
 }
 
 function contextForSymbol(context, symbol) {

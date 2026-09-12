@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v8.1.3
+- FRED Macro 의존 제거
+- U.S. Treasury 공식 XML에서 2Y·10Y 수익률 직접 수집
+- Federal Reserve Board H.10에서 Broad Dollar·USD/JPY 직접 수집
+- Cboe 공식 CSV에서 VIX·OVX 직접 수집
+- BLS Public Data API v1에서 CPI·실업률 수집
+- EIA 공개 WTI 현물가격 페이지에서 WTI 수집
+- 공급자별 독립 fallback/cache로 단일 공급자 장애 격리
+- 9개 Macro metric의 LIVE/CACHE/실패·품질가중·confidence penalty 표시
+- Macro API Key 불필요
+
 ## v8.1.2
 - FRED 공식 API(FRED_API_KEY 선택) → CSV → KV 최근 정상 캐시 fallback 추가
 - Macro 데이터 품질 `normal / partial / unavailable` 분류

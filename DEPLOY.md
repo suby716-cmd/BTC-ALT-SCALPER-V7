@@ -100,7 +100,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.1.2",
+  "version": "v8.1.3",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -142,7 +142,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 보유 체크 시 실제 진입가(KRW)를 입력해야 합니다. SELL 검토 알림의 손익 계산은 이 값을 사용합니다.
 
-## v8.1.2 장부·기기 동기화 확인
+## v8.1.3 장부·기기 동기화 확인
 
 배포 후 GitHub Pages의 **보유 · 매매 장부**에서 다음을 확인합니다.
 
@@ -159,9 +159,9 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 보유/매매 데이터는 Cloudflare KV에 저장되어 기기 간 공유됩니다. Worker URL/PIN은 각 브라우저 로컬 저장이므로 새 기기에서는 다시 입력해야 합니다. Cloudflare KV는 전 세계 엣지에 전파되는 저장소라 아주 짧은 동기화 지연이 생길 수 있습니다.
 
-장부 손익은 v8.1.2에서는 거래소 수수료 제외 기준입니다.
+장부 손익은 v8.1.3에서는 거래소 수수료 제외 기준입니다.
 
-## v8.1.2 백테스트 확인
+## v8.1.3 백테스트 확인
 
 배포 후 백테스트 영역에서 다음 순서로 확인합니다.
 
@@ -195,7 +195,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 ## v8.1 외부 Context 추가 설정
 
-기본 Macro/FRED와 Polymarket 공개시장 조회는 별도 API 키가 필요 없습니다. 대시보드의 `외부 컨텍스트 새로고침`, `수동 이벤트 추가`, `예측시장 추가` 버튼으로 사용할 수 있습니다.
+기본 Macro는 U.S. Treasury · Federal Reserve Board · Cboe · BLS · EIA의 공개 원천을 직접 사용하며 별도 API 키가 필요 없습니다. Polymarket 공개시장 조회 역시 별도 API 키 없이 사용합니다. 대시보드의 `외부 컨텍스트 새로고침`, `수동 이벤트 추가`, `예측시장 추가` 버튼으로 사용할 수 있습니다.
 
 코인 뉴스 자동점수를 사용하려면 Cloudflare Worker Secret에 선택적으로 다음을 추가합니다.
 
@@ -205,7 +205,7 @@ CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
 
 이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
 
-`/health`에서 v8.1.2, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+`/health`에서 v8.1.3, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
 
 ### Polymarket
 
@@ -221,14 +221,14 @@ Polymarket의 market ID(숫자)를 등록하고, 해당 시장에서 코인에 �
 점수는 사실 자체가 아니라 **해당 사건이 현재 전략의 위험선호에 미치는 영향에 대한 운영자 판단**입니다. 출처와 만료시간을 함께 기록하세요.
 
 
-## v8.1.2 선택 설정: FRED 공식 API
+## v8.1.3 Macro 공개 원천 확인
 
-Macro 안정성을 높이려면 Cloudflare Worker Secret에 `FRED_API_KEY`를 추가할 수 있습니다.
-이 키는 선택사항이며, 없으면 FRED CSV와 KV 최근 정상 캐시를 사용합니다.
+추가 Secret 없이 동작합니다. 대시보드의 `외부 컨텍스트 새로고침` 후 Macro 품질 박스에서 다음 원천을 확인하세요.
 
-- Cloudflare → Worker → Settings → Variables and Secrets
-- Secret 이름: `FRED_API_KEY`
-- 값: 본인의 FRED API key
-- **GitHub / wrangler.toml / README에 실제 키를 적지 마세요.**
+- U.S. Treasury: 미 2Y / 10Y
+- Federal Reserve Board H.10: 광의 달러지수 / USD·JPY
+- Cboe: VIX / OVX
+- BLS Public Data API v1: CPI / 실업률
+- EIA: WTI 현물가격
 
-대시보드의 Macro 상태가 `정상`, `부분 데이터`, `사용불가(N/A)` 중 무엇인지 반드시 확인하십시오.
+각 항목은 `LIVE`, `CACHE`, `실패` 중 하나로 표시됩니다. 일부 공급자가 일시 실패해도 나머지 공급자는 독립적으로 계속 사용됩니다. 공개 Macro 전체가 부족한 경우 `N/A`로 표시되고 기술적 5분 스캔은 계속 동작합니다.
