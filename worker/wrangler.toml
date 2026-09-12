@@ -19,7 +19,6 @@ crons = ["*/5 * * * *"]
 
 # 24시간 자동 알림/중복 방지/보유 상태 저장에 KV가 필수입니다.
 # Cloudflare에서 KV namespace를 만든 뒤 실제 id로 바꾸고 주석을 해제하세요.
-# [[kv_namespaces]]
-# binding = "SCALPER_KV"
-# id = "YOUR_KV_NAMESPACE_ID"
-# preview_id = "YOUR_KV_PREVIEW_ID"
+[[kv_namespaces]]
+binding = "SCALPER_KV"
+id = "b1d33dfeca5440dbba9b76b769c6bf95"
