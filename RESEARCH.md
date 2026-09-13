@@ -47,3 +47,37 @@ FRED를 거치지 않고 공식 공개 원천을 직접 사용해 다음 지표�
 거시 데이터 결측을 0점 중립으로 오인하지 않습니다. 9개 Macro metric의 LIVE/CACHE/missing 비율을 기록하고, 부분 데이터는 점수 가중치를 낮추며 실시간 confidence에 penalty를 적용합니다.
 
 공급자는 `Treasury / Federal Reserve Board / Cboe / BLS / EIA`로 분리합니다. 한 공급자 장애가 전체 Macro를 무효화하지 않도록 공급자별 캐시를 독립적으로 유지합니다. CPI·실업률처럼 월간 발표 주기가 긴 자료는 더 긴 캐시 유효기간을 허용하고, 국채·VIX·WTI처럼 일간 자료는 더 짧게 허용합니다.
+
+
+## v8.2 Pattern Engine 연구 근거
+
+사용자가 제공한 상승 패턴 자료(돌파, 풀백, 더블바텀, 상승삼각형, 박스, 대칭삼각형, 역헤드앤숄더, 컵앤핸들, VCP)를 출발점으로 삼되, 실시간 5분 스캘퍼에서 수치화가 쉽고 확인 조건이 명확한 구조를 우선 채택했습니다.
+
+### 공개적으로 참고한 프레임워크
+
+1. **Mark Minervini / VCP**: 우측 가격 변동폭이 줄고 공급이 감소한 뒤 피벗 돌파를 찾는 공개 VCP 개념. v8.2는 정확한 유료 규칙을 복제하지 않고 `3구간 range contraction + volume dry-up + pivot breakout`만 독립적으로 구현합니다.
+2. **Richard Wyckoff**: broad market trend, relative strength, volume confirmation, spring/upthrust, breakout 후 throwback/retest 개념. v8.2는 spring/upthrust와 15분 구조 확인에 반영합니다.
+3. **CMT / classical TA**: breakout은 거래량과 종가 확인이 중요하며, neckline/지지·저항 이탈 전에는 패턴을 확정하지 않는 원칙.
+4. **Crypto-specific evidence**: 암호화폐는 5분 단위 volume-return 상호관계와 intraday momentum/reversal이 보고되어 있어, 패턴명보다 `거래량 + 종가확인 + 시장국면`을 함께 쓰도록 설계합니다.
+
+### 구현 원칙
+
+- 모양 유사도/AI 이미지 인식은 사용하지 않습니다. OHLCV에서 직접 계산합니다.
+- 미래 데이터를 보지 않습니다. 모든 패턴은 현재 완료봉까지의 데이터만 사용합니다.
+- 단순 wick 돌파가 아니라 종가 위치와 거래량을 확인합니다.
+- 상승 패턴은 기존 Technical hard gate를 보조할 뿐, 단독 BUY를 만들지 않습니다.
+- 하락 패턴/failed breakout은 신규진입 차단과 보유 SELL 검토에 더 강하게 사용합니다.
+- 15분 구조를 5분 데이터에서 집계해 별도 API 호출 없이 multi-timeframe 확인을 합니다.
+- 같은 패턴이 중복 인식될 수 있으므로 Pattern Score는 `-8~+8`로 clamp 합니다.
+
+### 참고 공개 자료
+
+- CMT Association, Volume and Volatility: https://content.cmtassociation.org/a/volume-and-volatility
+- StockCharts ChartSchool, Wyckoff Method / Stock Analysis: https://chartschool.stockcharts.com/table-of-contents/market-analysis/wyckoff-analysis-articles
+- Binance Academy, Classical Chart Patterns: https://www.binance.com/en/academy/articles/a-beginners-guide-to-classical-chart-patterns
+- Mark Minervini public VCP workshop review: https://cdn.minervini.com/static/dist/mtp-review.1f8e8633.pdf
+- Finance Research Letters, technical trading rules in Bitcoin: trading-range breakout forecasting evidence (2020)
+- Research in International Business and Finance, intraday crypto volume-return nexus (2021)
+- International Review of Economics & Finance, candlestick patterns in cryptocurrency markets (2026)
+
+이 출처들은 패턴이 항상 맞는다는 뜻이 아닙니다. 인플루언서/분석가의 적중률을 독립적으로 검증할 수 없으므로, 사람의 명성보다 **재현 가능한 규칙과 백테스트/워크포워드 결과**를 우선합니다.

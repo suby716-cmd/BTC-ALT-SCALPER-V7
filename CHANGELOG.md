@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v8.2.0 Pattern Confirmation
+- 신규 BUY에 패턴 확인 gate 추가: 기존 기술조건을 통과해도 상승 패턴 확정이 없으면 BUY 대신 WATCH/IDLE
+- Pattern Score `-8~+8`, 기본 BUY 확인 `>= +2`, 하락 SELL 경고 `<= -4`
+- 5분 OHLCV 기반 거래범위 돌파/하향이탈, breakout retest, Wyckoff Spring/Upthrust, VCP-inspired contraction, Bull/Bear Flag, Triangle, Rectangle, Double Top/Bottom 추가
+- 5분봉을 15분봉으로 집계해 Market Structure 방향을 보조 확인
+- 가짜 돌파/Upthrust와 하락 패턴을 Risk/SELL REVIEW에 반영
+- Telegram BUY/SELL 메시지에 Pattern 점수·대표 패턴·15분 구조·패턴 근거 추가
+- 대시보드에 Pattern 열 및 패턴 상세 tooltip 추가
+- 백테스트에서 `Pattern ON/OFF` 비교 가능
+- 기존 Macro/Context/KV/Telegram/장부/12개 코인 기능 유지
+- 특정 인플루언서의 독점 신호는 복제하지 않고 공개된 VCP/Wyckoff/CMT/고전 패턴 원리만 정량화
+
 ## v8.1.4 안정화판
 - Macro 품질 경계값 수정: 9개 중 6개(정확히 2/3) 확보 시 `partial`로 정상 사용
 - BLS CPI/실업률은 12시간 최소 갱신 간격을 두어 5분 Cron 반복 호출과 429를 방지

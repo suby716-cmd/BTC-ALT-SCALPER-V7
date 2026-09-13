@@ -1,5 +1,5 @@
-const VERSION = 'v8.1.4';
-const STRATEGY_VERSION = 'krw-5m-v8.1.4-stable-public-macro';
+const VERSION = 'v8.2.0';
+const STRATEGY_VERSION = 'krw-5m-v8.2-pattern-confirm';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const POS_KEY = 'positions';
@@ -380,6 +380,142 @@ function closed15mCloses(k5, asOf) {
   return [...byBucket.entries()].sort((a, b) => a[0] - b[0]).map(x => x[1]);
 }
 
+// v8.2 Pattern Engine
+// 사람의 눈으로 모양을 맞추는 대신 OHLCV 구조를 수치화합니다.
+// 공개적으로 알려진 VCP/와이코프/고전 패턴의 핵심 개념만 사용하며 특정 유료 신호를 복제하지 않습니다.
+function aggregateClosedCandles(k5, intervalMs, asOf) {
+  const cutoff = Math.floor(asOf / intervalMs) * intervalMs;
+  const m = new Map();
+  for (const r of k5) {
+    if (r[0] >= cutoff) continue;
+    const b = Math.floor(r[0] / intervalMs) * intervalMs;
+    let z = m.get(b);
+    if (!z) z = [b, Number(r[1]), Number(r[2]), Number(r[3]), Number(r[4]), Number(r[5])];
+    else { z[2] = Math.max(z[2], Number(r[2])); z[3] = Math.min(z[3], Number(r[3])); z[4] = Number(r[4]); z[5] += Number(r[5]); }
+    m.set(b, z);
+  }
+  return [...m.values()].sort((a,b)=>a[0]-b[0]);
+}
+
+const avg = a => a.length ? a.reduce((x,y)=>x+Number(y),0)/a.length : 0;
+function candleRangePct(r) { const c = Number(r?.[4]) || 0; return c ? (Number(r[2])-Number(r[3]))/c*100 : 0; }
+function closeLocation(r) { const h=Number(r?.[2]), l=Number(r?.[3]), c=Number(r?.[4]); return h>l ? (c-l)/(h-l) : .5; }
+function bodyPct(r) { const o=Number(r?.[1]), c=Number(r?.[4]); return c ? Math.abs(c-o)/c*100 : 0; }
+function pivotPoints(k, side='low', width=2) {
+  const out=[];
+  for(let i=width;i<k.length-width;i++){
+    const v=Number(k[i][side==='low'?3:2]); let ok=true;
+    for(let j=i-width;j<=i+width;j++) if(j!==i){ const q=Number(k[j][side==='low'?3:2]); if(side==='low' ? q<=v : q>=v){ok=false;break;} }
+    if(ok) out.push({i,v,time:k[i][0]});
+  }
+  return out;
+}
+function near(a,b,tol=.005){ return Number.isFinite(a)&&Number.isFinite(b)&&b!==0&&Math.abs(a/b-1)<=tol; }
+
+function analyzePatterns(k5, asOf) {
+  const k = k5.slice(-90);
+  if (k.length < 40) return { score:0, bullishConfirmed:false, bearishConfirmed:false, label:'데이터 부족', reasons:[], trend15:'FLAT', setups:[] };
+  const cur=k.at(-1), prev=k.slice(0,-1), p=closes(k), v=volumes(k);
+  const price=Number(cur[4]), vr=avg(v.slice(-21,-1)) ? Number(cur[5])/avg(v.slice(-21,-1)) : 1;
+  const atrPct=price?ATR(k)/price*100:0;
+  const k15=aggregateClosedCandles(k5,FIFTEEN_MIN,asOf), p15=closes(k15);
+  const trend15 = p15.length>=12 ? (EMA(p15,5)>EMA(p15,12)&&p15.at(-1)>p15.at(-4)?'UP':EMA(p15,5)<EMA(p15,12)&&p15.at(-1)<p15.at(-4)?'DOWN':'FLAT') : 'FLAT';
+  const adds=[];
+  const add=(name,score,reason,confirmed=true)=>adds.push({name,score,reason,confirmed});
+
+  const base20=prev.slice(-20), highs20=base20.map(x=>Number(x[2])), lows20=base20.map(x=>Number(x[3]));
+  const resistance=Math.max(...highs20), support=Math.min(...lows20);
+  const breakout = price > resistance*1.0005 && closeLocation(cur)>=.62 && vr>=1.12;
+  const breakdown = price < support*.9995 && closeLocation(cur)<=.38 && vr>=1.12;
+  if(breakout) add('거래범위 돌파',3,`20봉 저항 돌파·Vol ${rnd(vr)}x`);
+  if(breakdown) add('거래범위 하향이탈',-3,`20봉 지지 이탈·Vol ${rnd(vr)}x`);
+
+  // 돌파 후 되돌림(retest/throwback): 과거 저항을 지지로 재확인한 경우.
+  const older=prev.slice(-30,-6), recent=prev.slice(-6);
+  if(older.length>=16){
+    const lvl=Math.max(...older.map(x=>Number(x[2])));
+    const hadBreak=recent.some(x=>Number(x[4])>lvl*1.0005);
+    if(hadBreak && Number(cur[3])<=lvl*1.0035 && price>=lvl*.9995 && closeLocation(cur)>.55) add('돌파 리테스트',4,'이전 저항을 지지로 재확인');
+  }
+
+  // Wyckoff spring / upthrust: 지지·저항을 잠시 넘었다가 범위 안으로 복귀.
+  const lowerWick=Math.min(Number(cur[1]),price)-Number(cur[3]);
+  const upperWick=Number(cur[2])-Math.max(Number(cur[1]),price);
+  const body=Math.abs(price-Number(cur[1])) || price*.0001;
+  if(Number(cur[3])<support*.998 && price>support && lowerWick>body*1.2 && vr>=1.05) add('Wyckoff Spring',3,'지지 하회 후 범위 복귀·매수 반전');
+  if(Number(cur[2])>resistance*1.002 && price<resistance && upperWick>body*1.2 && vr>=1.05) add('Failed Breakout / Upthrust',-5,'저항 상회 후 종가 재진입·불트랩');
+
+  // Triangle / rectangle: 상단·하단의 평탄도와 저점/고점 진행 방향을 수치화.
+  const tri=prev.slice(-24);
+  if(tri.length>=20){
+    const hs=tri.map(x=>Number(x[2])), ls=tri.map(x=>Number(x[3]));
+    const top4=[...hs].sort((a,b)=>b-a).slice(0,4), bot4=[...ls].sort((a,b)=>a-b).slice(0,4);
+    const top=avg(top4), bot=avg(bot4);
+    const flatTop=(Math.max(...top4)-Math.min(...top4))/top<=.0045;
+    const flatBot=(Math.max(...bot4)-Math.min(...bot4))/bot<=.0045;
+    const half=Math.floor(ls.length/2), lowRise=Math.min(...ls.slice(half))/Math.min(...ls.slice(0,half))-1;
+    const highFall=Math.max(...hs.slice(half))/Math.max(...hs.slice(0,half))-1;
+    if(flatTop && lowRise>.002 && price>top*1.0005 && vr>=1.10) add('상승 삼각형',3,'평탄 저항+Higher Low+거래량 돌파');
+    if(flatBot && highFall<-.002 && price<bot*.9995 && vr>=1.10) add('하락 삼각형',-4,'평탄 지지+Lower High+거래량 이탈');
+    const boxWidth=(top/bot-1)*100;
+    if(flatTop&&flatBot&&boxWidth>=.5&&boxWidth<=3.5){
+      if(price>top*1.0005&&vr>=1.10)add('Flat Base / Rectangle',3,'박스 상단 종가 돌파');
+      if(price<bot*.9995&&vr>=1.10)add('Rectangle Breakdown',-3,'박스 하단 종가 이탈');
+    }
+  }
+
+  // Double bottom / top + neckline confirmation.
+  const pivL=pivotPoints(prev.slice(-40),'low',2), pivH=pivotPoints(prev.slice(-40),'high',2);
+  if(pivL.length>=2){
+    const a=pivL.at(-2), b=pivL.at(-1);
+    if(b.i-a.i>=5 && near(a.v,b.v,.007)){
+      const seg=prev.slice(-40+a.i,-40+b.i+1); const neck=seg.length?Math.max(...seg.map(x=>Number(x[2]))):NaN;
+      if(Number.isFinite(neck)&&price>neck*1.0005&&vr>=1.08)add('Double Bottom',3,'W바닥 neckline 종가 돌파');
+    }
+  }
+  if(pivH.length>=2){
+    const a=pivH.at(-2), b=pivH.at(-1);
+    if(b.i-a.i>=5 && near(a.v,b.v,.007)){
+      const seg=prev.slice(-40+a.i,-40+b.i+1); const neck=seg.length?Math.min(...seg.map(x=>Number(x[3]))):NaN;
+      if(Number.isFinite(neck)&&price<neck*.9995&&vr>=1.08)add('Double Top',-4,'M천장 neckline 종가 이탈');
+    }
+  }
+
+  // VCP-inspired contraction: 3구간 변동폭/거래량 수축 뒤 피벗 돌파.
+  const vcp=prev.slice(-30);
+  if(vcp.length===30){
+    const segs=[vcp.slice(0,10),vcp.slice(10,20),vcp.slice(20,30)];
+    const rg=segs.map(z=>avg(z.map(candleRangePct))), vv=segs.map(z=>avg(z.map(x=>Number(x[5]))));
+    const contraction=rg[0]>rg[1]*1.08&&rg[1]>rg[2]*1.05;
+    const volDry=vv[0]>vv[1]*1.04&&vv[1]>vv[2]*1.01;
+    const pivot=Math.max(...vcp.slice(-10).map(x=>Number(x[2])));
+    if(contraction&&volDry&&price>pivot*1.0005&&vr>=1.12)add('VCP 돌파',4,`변동폭·거래량 수축 후 피벗 돌파`);
+  }
+
+  // Flag continuation: 강한 impulse 후 얕은 반대방향 정리와 재돌파.
+  const flag=prev.slice(-16);
+  if(flag.length===16){
+    const impulseStart=Number(flag[0][4]), impulseEnd=Number(flag[7][4]), impulsePct=pct(impulseEnd,impulseStart);
+    const cons=flag.slice(8), consHigh=Math.max(...cons.map(x=>Number(x[2]))), consLow=Math.min(...cons.map(x=>Number(x[3])));
+    const consVol=avg(cons.map(x=>Number(x[5]))), impulseVol=avg(flag.slice(0,8).map(x=>Number(x[5])));
+    if(impulsePct>Math.max(.8,atrPct*2.5) && (consHigh/consLow-1)<.018 && consVol<impulseVol*.9 && price>consHigh*1.0005 && vr>=1.08)add('Bull Flag',3,'강한 상승→저거래량 조정→재돌파');
+    if(impulsePct<-Math.max(.8,atrPct*2.5) && (consHigh/consLow-1)<.018 && consVol<impulseVol*.9 && price<consLow*.9995 && vr>=1.08)add('Bear Flag',-4,'강한 하락→저거래량 반등→재이탈');
+  }
+
+  // 15분 구조는 독립 확인 필터. 5분 패턴의 잡음을 줄이기 위해 점수는 작게 둡니다.
+  if(trend15==='UP') add('15m Market Structure',1,'15분 EMA/종가 구조 상승',false);
+  if(trend15==='DOWN') add('15m Market Structure',-2,'15분 EMA/종가 구조 하락',false);
+
+  const raw=adds.reduce((a,x)=>a+x.score,0), score=clamp(raw,-8,8);
+  const bullish=adds.filter(x=>x.confirmed&&x.score>0), bearish=adds.filter(x=>x.confirmed&&x.score<0);
+  const strongest=[...adds].sort((a,b)=>Math.abs(b.score)-Math.abs(a.score))[0];
+  return {
+    score:rnd(score), rawScore:rnd(raw), bullishConfirmed:bullish.length>0, bearishConfirmed:bearish.length>0,
+    trend15, label:strongest?.name||'확정 패턴 없음', reasons:adds.sort((a,b)=>Math.abs(b.score)-Math.abs(a.score)).slice(0,4).map(x=>`${x.name} ${x.score>0?'+':''}${x.score}: ${x.reason}`),
+    setups:adds.map(x=>({name:x.name,score:x.score,confirmed:x.confirmed})), resistance:rnd(resistance,8), support:rnd(support,8), volRatio:rnd(vr), atrPct:rnd(atrPct,3)
+  };
+}
+
 function strategyConfig(env) {
   return {
     minScore: numEnv(env.MIN_SCORE, 75),
@@ -390,7 +526,10 @@ function strategyConfig(env) {
     sellCooldownMin: numEnv(env.SELL_COOLDOWN_MINUTES, 60),
     maxBuyAlerts: clampInt(numEnv(env.MAX_BUY_ALERTS, 2), 1, 10),
     contextBlockThreshold: numEnv(env.CONTEXT_BLOCK_THRESHOLD, -8),
-    contextSellThreshold: numEnv(env.CONTEXT_SELL_THRESHOLD, -12)
+    contextSellThreshold: numEnv(env.CONTEXT_SELL_THRESHOLD, -12),
+    patternConfirmation: String(env.PATTERN_CONFIRMATION ?? 'true').toLowerCase() !== 'false',
+    patternBuyMinScore: numEnv(env.PATTERN_BUY_MIN_SCORE, 2),
+    patternSellScore: numEnv(env.PATTERN_SELL_SCORE, -4)
   };
 }
 
@@ -415,6 +554,7 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
   const breakout = price >= recentHigh * 0.9995;
   const atrPct = price ? ATR(k5) / price * 100 : 0;
   const slope5 = pct(e20, e20Prev), btcSlope = pct(be20, be20Prev);
+  const pattern = analyzePatterns(k5, asOf);
 
   let score = 0;
   const reasons = [];
@@ -434,16 +574,18 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
   const crash = bret <= -0.9 || br < 40 || bp.at(-1) < be20 * 0.995;
   const regime = br >= 48 && br <= 68 && bp.at(-1) > be20 ? 'RISK_ON' : 'RISK_OFF';
   const techScore = score;
+  const patternScore = Number(pattern.score) || 0;
   const contextScore = clamp(Number(external?.total) || 0, -20, 20);
-  const adjustedScore = clamp(techScore + contextScore, 0, 100);
+  const adjustedScore = clamp(techScore + patternScore + contextScore, 0, 100);
   const contextBlocked = contextScore <= cfg.contextBlockThreshold || !!external?.severeRisk;
-  // 외부 호재만으로 기술적 진입 조건을 통과시키지 않습니다. 기술적 hard gate는 반드시 유지합니다.
+  const patternGate = !cfg.patternConfirmation || (pattern.bullishConfirmed && patternScore >= cfg.patternBuyMinScore && pattern.trend15 !== 'DOWN' && !pattern.bearishConfirmed);
+  // 외부 호재나 단순 패턴 모양만으로 BUY를 만들지 않습니다. 기존 기술조건 + 패턴 확정 + 완료봉/거래량 확인을 함께 요구합니다.
   const hardTech = techScore >= cfg.minScore && regime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
-  const hard = hardTech && !contextBlocked;
+  const hard = hardTech && patternGate && !contextBlocked;
   const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
   const contextDataPenalty = clamp(Number(external?.confidencePenalty)||0, 0, 15);
-  const confidence = clamp(techScore * 0.68 + contextScore * 1.15 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 6 : 0) + (breakout ? 4 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0) - contextDataPenalty, 0, 100);
-  const risk = crash || regime === 'RISK_OFF' || r > 76 || contextScore <= -8 || external?.severeRisk ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
+  const confidence = clamp(techScore * 0.64 + patternScore * 2.7 + contextScore * 1.05 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 5 : 0) + (pattern.trend15 === 'UP' ? 4 : pattern.trend15 === 'DOWN' ? -6 : 0) + (breakout ? 2 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0) - contextDataPenalty, 0, 100);
+  const risk = crash || regime === 'RISK_OFF' || r > 76 || contextScore <= -8 || external?.severeRisk || pattern.bearishConfirmed || patternScore <= cfg.patternSellScore ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
 
   return {
     symbol,
@@ -454,6 +596,13 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
     btcPrice: bp.at(-1),
     score: rnd(techScore),
     adjustedScore: rnd(adjustedScore),
+    patternScore: rnd(patternScore),
+    patternLabel: pattern.label,
+    patternTrend15: pattern.trend15,
+    patternBullish: pattern.bullishConfirmed,
+    patternBearish: pattern.bearishConfirmed,
+    patternReasons: pattern.reasons,
+    pattern,
     contextScore: rnd(contextScore),
     context: external || null,
     contextBlocked,
@@ -496,6 +645,7 @@ function sellCheck(s, pos, cfg) {
   if (s.ema9 < s.ema20 && s.relRet5 < 0) reasons.push('단기 추세·상대모멘텀 동시 약화');
   if (s.score < 48 && s.ema9 < s.ema20) reasons.push('종합점수 하락 + EMA 약세');
   if (entry && gain >= 1 && s.score < 55 && s.ema9 < s.ema20) reasons.push('수익 보호: 상승 후 추세 이탈');
+  if (s.patternBearish && Number(s.patternScore) <= cfg.patternSellScore) reasons.push(`하락 패턴 확인: ${s.patternLabel} (${s.patternScore})`);
   if (s.context?.severeRisk) reasons.push('외부 이벤트 고위험 경보');
   else if (Number(s.contextScore) <= cfg.contextSellThreshold && (s.regime === 'RISK_OFF' || s.score < 60)) reasons.push(`외부 컨텍스트 악화 ${s.contextScore}점`);
   return { sell: reasons.length > 0, gain: rnd(gain), reasons };
@@ -1277,11 +1427,11 @@ function kstTime(ms) {
 }
 
 function formatBuy(s, cfg) {
-  return `🟢 BUY SIGNAL ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\nTech Score: ${s.score}/100 (기준 ${cfg.minScore})\n외부 Context: ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 합산 ${s.adjustedScore}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🎯 TP1 +${cfg.tp1Pct}%: ₩${fmt(s.tp1)}\n🎯 TP2 +${cfg.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 SL -${cfg.stopLossPct}%: ₩${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n⚠️ 알림 전용이며 주문은 자동 실행하지 않습니다.`;
+  return `🟢 BUY SIGNAL ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\nTech Score: ${s.score}/100 (기준 ${cfg.minScore})\nPattern: ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} · ${s.patternLabel} · 15m ${s.patternTrend15}\n외부 Context: ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 합산 ${s.adjustedScore}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🎯 TP1 +${cfg.tp1Pct}%: ₩${fmt(s.tp1)}\n🎯 TP2 +${cfg.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 SL -${cfg.stopLossPct}%: ₩${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n패턴: ${(s.patternReasons||[]).join(' · ') || '확정 패턴 없음'}\n⚠️ 알림 전용이며 주문은 자동 실행하지 않습니다.`;
 }
 
 function formatSell(s) {
-  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nTech Score: ${s.score}/100 · Context ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
+  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nTech Score: ${s.score}/100 · Pattern ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} (${s.patternLabel}) · Context ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
 }
 
 function fmt(x) {

@@ -1,8 +1,35 @@
-# BTC ALT SCALPER v8.1.4
+# BTC ALT SCALPER v8.2.0
 
 Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
 
 > 이 프로젝트는 주문을 자동 실행하지 않습니다. Telegram 알림을 바탕으로 사용자가 직접 판단하는 수동매매 보조 도구입니다.
+
+## v8.2.0 Pattern Confirmation Engine
+
+하루 손익만으로 전략의 우열을 확정할 수는 없지만, v8.1.x의 진입이 **점수는 높아도 차트 구조 확인 없이 발생할 수 있는 문제**를 줄이기 위해 신규 BUY를 더 보수적으로 바꿨습니다.
+
+- 기존 Technical Score ≥ 기준값은 그대로 유지합니다.
+- 그 위에 **확정된 상승 패턴 + 완료봉 종가 + 거래량 확인 + 15분 구조 비하락**을 추가로 요구합니다.
+- 패턴 자체가 BUY를 만들 수 없습니다. 기존 RSI/EMA/상대강도/거래량/BTC Risk-On 조건을 모두 통과한 뒤 마지막 확인 필터로만 작동합니다.
+- 하락 패턴/가짜 돌파는 보유 포지션의 SELL 검토 사유와 위험도에 반영합니다.
+- Pattern Score 기본 범위는 `-8 ~ +8`, BUY 확인 기본값은 `+2 이상`, SELL 경고 기본값은 `-4 이하`입니다.
+- 백테스트 화면에서 `v8.2 패턴확인 ON / 비교용 패턴 OFF`를 바꿔 같은 기간 성과를 직접 비교할 수 있습니다.
+
+### 포함한 공개 패턴 구조
+
+- **Trading range breakout / breakdown**: 종가와 거래량으로 확정
+- **Breakout retest / throwback**: 돌파한 저항을 지지로 재확인
+- **Wyckoff Spring / Upthrust**: 지지·저항의 실패 돌파와 범위 복귀
+- **VCP-inspired contraction**: 변동폭과 거래량 수축 뒤 피벗 돌파
+- **Bull/Bear Flag**: impulse → 저거래량 조정 → 재돌파/재이탈
+- **Ascending/Descending Triangle**
+- **Flat Base / Rectangle**
+- **Double Bottom / Double Top + neckline 확인**
+- **15분 Market Structure 확인**: 5분봉 잡음 필터
+
+특정 인플루언서의 실시간 매매 신호나 유료/독점 규칙을 복제하지 않습니다. Mark Minervini의 공개 VCP 개념, Wyckoff의 공개 시장구조/스프링·업스러스트 개념, CMT의 가격·거래량 확인 원칙, 고전적 breakout/flag/triangle 구조를 **재현 가능한 수치 규칙**으로 구현했습니다.
+
+> v8.2는 수익을 보장하지 않습니다. 특히 하루 수익률은 표본이 너무 작습니다. 배포 후 30/60/90일 백테스트에서 Pattern ON/OFF를 비교하고, 실전에서는 소액·관찰 중심으로 검증하세요.
 
 ## v8.1.4 안정화판
 
@@ -124,7 +151,7 @@ FRED 의존을 제거하고 **미국 정부·공식 거래소의 공개 원천�
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.1.4입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.2.0입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets

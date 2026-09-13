@@ -100,7 +100,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.1.4",
+  "version": "v8.2.0",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -205,7 +205,7 @@ CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
 
 이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
 
-`/health`에서 v8.1.4, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+`/health`에서 v8.2.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
 
 ### Polymarket
 
@@ -236,8 +236,17 @@ Polymarket의 market ID(숫자)를 등록하고, 해당 시장에서 코인에 �
 
 ## v8.1.4 안정화 확인
 
-- `/health`에서 `version: v8.1.4`, `kv:true`, Telegram/PIN true 확인
+- `/health`에서 `version: v8.2.0`, `kv:true`, Telegram/PIN true 확인
 - 외부 Context 새로고침 후 9개 중 6개 이상이면 `부분 데이터`로 계산되어야 함
 - BLS가 429를 반환해도 이미 저장된 최근 정상 캐시가 있으면 계속 사용하며, 12시간 이내에는 반복 호출하지 않음
 - OVX 공개 CSV가 2열/다른 value 열 이름이어도 파서가 수치열을 탐색
 - 배포 후 7일은 전략 값 변경 없이 오류·Cron·Telegram·장부 동기화만 관찰 권장
+
+
+## v8.2 Pattern Confirmation 확인
+
+배포 후 `/health`의 `strategy`에서 `patternConfirmation:true`, `patternBuyMinScore:2`, `patternSellScore:-4`를 확인합니다.
+
+대시보드에서는 각 코인의 `Pattern` 열에 점수와 대표 패턴이 표시됩니다. BUY는 기존 Technical hard gate와 Context 보호장치에 더해 **확정된 상승 패턴 + Pattern Score 기준 + 15분 구조 비하락**을 모두 만족해야 합니다.
+
+백테스트에서는 `v8.2 패턴확인 ON`과 `비교용 패턴 OFF`를 같은 코인·기간·수수료·슬리피지로 각각 실행해 거래수, PF, 기대값, MDD를 비교하세요. 하루 실전 손익만으로 설정을 다시 바꾸지 않는 것을 권장합니다.
