@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0e17">
 <link rel="manifest" href="manifest.json">
-<title>BTC ALT REGIME TRADER v8.3.0</title>
+<title>BTC ALT REGIME TRADER v8.3.1</title>
 <style>
 :root{--bg:#080c15;--panel:#11182a;--panel2:#151f34;--line:#263149;--text:#e9edf7;--muted:#8290aa;--green:#4ade80;--yellow:#facc15;--red:#fb7185;--blue:#38bdf8;--violet:#a78bfa}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Arial,sans-serif}.wrap{max-width:1440px;margin:auto;padding:20px}.head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px}.title h1{margin:0;font-size:27px}.sub{color:var(--muted);margin-top:5px}.status{padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--yellow);margin-right:7px}.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}.card{padding:13px}.label{color:var(--muted);font-size:12px}.value{font-size:19px;font-weight:700;margin-top:4px}.panel{padding:14px;margin-top:11px}.controls,.btgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;align-items:center}.controls input,.controls select,.btgrid input,.btgrid select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px;border-radius:8px;width:100%}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:9px 12px;border-radius:8px;cursor:pointer}.btn:hover{border-color:var(--blue)}.btn.primary{border-color:var(--blue)}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-size:12px}.buy{color:var(--green);font-weight:700}.watch{color:var(--yellow);font-weight:700}.idle,.stale{color:var(--muted)}.error{color:var(--red)}.small{font-size:12px;color:var(--muted)}.signal{font-size:18px;font-weight:700}.reason{color:var(--muted);font-size:12px}.log{white-space:pre-wrap;background:#0c1220;border-radius:9px;padding:11px;min-height:55px}.subpanel{margin-top:10px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}.metricgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}.metric{padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}.metric b{display:block;font-size:18px;margin-top:3px}.good{color:var(--green)}.bad{color:var(--red)}.neutral{color:var(--yellow)}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.note{border-left:3px solid var(--violet);padding:9px 11px;background:#121a2d}.danger{border-left-color:var(--red)}.ok{border-left-color:var(--green)}.ledgergrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.ledger-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.ledger-actions{display:flex;gap:8px;flex-wrap:wrap}.ledger-input{width:110px;max-width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 7px;border-radius:7px}.mini-btn{padding:6px 8px;font-size:12px}.pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
@@ -15,7 +15,7 @@
 <body>
 <div class="wrap">
   <div class="head">
-    <div class="title"><h1>⚡ BTC ALT REGIME TRADER v8.3.0</h1><div class="sub">Upbit KRW · 일봉 Regime + 15분/5분 Pattern · Cloudflare 24시간 Cron · Telegram 수동매매 알림 전용</div></div>
+    <div class="title"><h1>⚡ BTC ALT REGIME TRADER v8.3.1</h1><div class="sub">Upbit KRW · 일봉 Regime + 15분/5분 Pattern · Cloudflare 24시간 Cron · Telegram 수동매매 알림 전용</div></div>
     <div class="status"><span class="dot" id="dot"></span><span id="status">연결 준비중</span></div>
   </div>
 
@@ -80,12 +80,12 @@
   </div>
 
   <div class="panel">
-    <b>📊 V8.3 Upbit KRW Regime 백테스트</b>
-    <p class="small">v8.3은 BTC <b>완료 일봉 Regime</b>을 상위 필터로 두고 5분 기술조건·15분 구조·Pattern을 결합합니다. STRONG_BULL/BULL에서는 작은 눌림만으로 SELL하지 않고, RANGE에서는 진입 기준을 높이며, BEAR/CRASH에서는 신규 BUY 알림을 차단합니다. TP/SL/Trail도 고정 1.2/2.2/0.8% 대신 <b>각 코인의 5분 ATR + 대세 Regime</b>에 따라 넓이와 보유시간을 바꿉니다. 백테스트는 완료봉에서 판정하고 다음 5분봉 시가에 진입하며 수수료·슬리피지를 반영합니다. <b>외부 거시/뉴스 점수는 과거 시점 복원이 불완전하여 백테스트에는 포함하지 않습니다.</b></p>
+    <b>📊 V8.3.1 Upbit KRW Regime Quality 백테스트</b>
+    <p class="small">v8.3.1은 BTC <b>완료 일봉 Regime</b>을 상위 필터로 두고 5분 기술조건·15분 구조·Pattern을 결합합니다. 90일 검증에서 손실이 컸던 <b>RANGE 신규 BUY를 차단</b>하고, 알트의 15분 BTC 상대강도/중기 EMA 품질과 Anti-Chase(과열 추격 방지)를 추가했습니다. STRONG_BULL/BULL의 작은 BTC Risk-Off는 즉시 SELL하지 않고 Hard Crash와 복수 약화를 구분합니다. TP/SL/Trail도 고정 1.2/2.2/0.8% 대신 <b>각 코인의 5분 ATR + 대세 Regime</b>에 따라 넓이와 보유시간을 바꿉니다. 백테스트는 완료봉에서 판정하고 다음 5분봉 시가에 진입하며 수수료·슬리피지를 반영합니다. <b>외부 거시/뉴스 점수는 과거 시점 복원이 불완전하여 백테스트에는 포함하지 않습니다.</b></p>
     <div class="btgrid">
       <select id="btCoin"><option value="ALL">ALL</option><option>ETH</option><option>SOL</option><option>XRP</option><option>HBAR</option><option>ONDO</option><option>LINK</option><option>AVAX</option><option>DOGE</option><option>SUI</option><option>TAO</option><option>UNI</option><option>AAVE</option></select>
       <select id="btDays"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="60">최근 60일</option><option value="90">최근 90일</option></select>
-      <select id="btMode"><option value="regime" selected>v8.3 Regime+Adaptive Exit</option><option value="adaptive">v8.2 ATR+SELL+Trail 비교</option><option value="live">v8.2 실전 SELL 동기형</option><option value="legacy">기존 고정 TP/SL</option></select>
+      <select id="btMode"><option value="regimeq" selected>v8.3.1 Regime Quality Filter</option><option value="regime">v8.3.0 Regime+Adaptive 비교</option><option value="adaptive">v8.2 ATR+SELL+Trail 비교</option><option value="live">v8.2 실전 SELL 동기형</option><option value="legacy">기존 고정 TP/SL</option></select>
       <select id="btPattern"><option value="on" selected>Pattern ON</option><option value="off">Pattern OFF 비교</option></select><select id="btRegime"><option value="on" selected>v8.3 Regime ON</option><option value="off">Regime OFF 비교</option></select>
       <input id="btFee" type="number" step="0.01" value="0.05" placeholder="편도 수수료 %">
       <input id="btSlip" type="number" step="0.01" value="0.03" placeholder="편도 슬리피지 %">
@@ -98,7 +98,7 @@
       <input id="btTrail" type="number" step="0.1" value="1.1" placeholder="ATR Trail 배수">
       <button class="btn" id="btRun">백테스트 실행</button>
     </div>
-    <div class="small" style="margin-top:7px">권장 비교 순서: 같은 기간·같은 수수료에서 <b>v8.2 비교(Regime OFF)</b>와 <b>v8.3 Regime ON</b>을 각각 실행하세요. v8.3은 상승장에서 TP1 일부익절 비율을 낮추고 Runner를 오래 유지하며, 하락장에서는 신규 BUY를 차단해 거래 회전율과 수수료 누적을 줄이는 방향입니다. 60~90일 ALL은 데이터 수집에 수분이 걸릴 수 있습니다.</div>
+    <div class="small" style="margin-top:7px">권장 비교 순서: 같은 90일·같은 비용·Score 75에서 먼저 <b>v8.3.0 비교</b>, 다음 <b>v8.3.1 Regime Quality Filter</b>를 실행하세요. v8.3.1은 RANGE BUY 차단, 알트 상대강도 품질, Anti-Chase, Hard/Soft BTC 급락 분리를 적용합니다. 목표는 PF 1.0 돌파 여부를 검증하는 것입니다. 60~90일 ALL은 데이터 수집에 수분이 걸릴 수 있습니다.</div>
     <div id="btMetrics" class="metricgrid" style="margin-top:10px"></div>
     <div id="btModeStats" class="subpanel"></div><div id="btCoinStats" class="subpanel"></div><div id="btScoreStats" class="subpanel"></div><div id="btTimeStats" class="subpanel"></div><div id="btRegimeStats" class="subpanel"></div><div id="btRiskStats" class="subpanel"></div>
     <div class="log" id="btLog" style="margin-top:10px">아직 실행하지 않았습니다. 첫 실행은 Upbit 과거 데이터를 페이지 단위로 받아오므로 시간이 걸릴 수 있으며, 같은 세션에서는 더 긴 기간의 캐시를 재사용합니다.</div>
@@ -116,7 +116,7 @@
 </div>
 
 <script>
-const VERSION='v8.3.0';
+const VERSION='v8.3.1';
 const COINS=['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const FIVE_MIN=5*60*1000,FIFTEEN_MIN=15*60*1000,DAY_MS=24*60*60*1000;
 const $=id=>document.getElementById(id);
@@ -308,23 +308,30 @@ function closeLocation(r){const h=+r?.[2],l=+r?.[3],c=+r?.[4];return h>l?(c-l)/(
 function pivotPoints(k,side='low',width=2){const out=[];for(let i=width;i<k.length-width;i++){const v=+k[i][side==='low'?3:2];let ok=true;for(let j=i-width;j<=i+width;j++)if(j!==i){const q=+k[j][side==='low'?3:2];if(side==='low'?q<=v:q>=v){ok=false;break}}if(ok)out.push({i,v,time:k[i][0]})}return out}
 function near(a,b,tol=.005){return Number.isFinite(a)&&Number.isFinite(b)&&b!==0&&Math.abs(a/b-1)<=tol}
 function analyzeMarketRegime(daily){const d=(daily||[]).slice(-200);if(d.length<60)return{state:'RANGE',score:0,confidence:20,reasons:['장기 일봉 데이터 부족'],dataPoints:d.length};const p=closes(d),price=p.at(-1),e20=EMA(p,20),e50=EMA(p,50),e200=d.length>=180?EMA(p,Math.min(200,p.length)):null,rsi=RSI(p,14),ret30=p.length>30?pct(price,p.at(-31)):null,ret90=p.length>90?pct(price,p.at(-91)):null,high90=Math.max(...p.slice(-Math.min(90,p.length))),dd=high90?(price/high90-1)*100:0,e20p=p.length>10?EMA(p.slice(0,-10),20):e20,e50p=p.length>10?EMA(p.slice(0,-10),50):e50;let s=0;const rs=[];if(e200){if(price>e200){s+=18;rs.push('가격>200EMA')}else{s-=18;rs.push('가격<200EMA')}if(e50>e200){s+=14;rs.push('50EMA>200EMA')}else{s-=14;rs.push('50EMA<200EMA')}}if(price>e50)s+=10;else s-=10;if(e20>e50)s+=8;else s-=8;if(e20>e20p)s+=5;else s-=5;if(e50>e50p)s+=4;else s-=4;if(ret30!=null){if(ret30>=12){s+=10;rs.push(`30일 +${ret30.toFixed(1)}%`)}else if(ret30>=4)s+=5;else if(ret30<=-12){s-=10;rs.push(`30일 ${ret30.toFixed(1)}%`)}else if(ret30<=-4)s-=5}if(ret90!=null){if(ret90>=25){s+=10;rs.push(`90일 +${ret90.toFixed(1)}%`)}else if(ret90>=8)s+=5;else if(ret90<=-25){s-=10;rs.push(`90일 ${ret90.toFixed(1)}%`)}else if(ret90<=-8)s-=5}if(dd>=-8)s+=6;else if(dd<=-25){s-=12;rs.push(`90일 고점대비 ${dd.toFixed(1)}%`)}else if(dd<=-15){s-=7;rs.push(`90일 고점대비 ${dd.toFixed(1)}%`)}if(rsi>=55&&rsi<=72)s+=5;else if(rsi<42){s-=6;rs.push(`일봉 RSI ${rsi.toFixed(1)}`)}else if(rsi>80)s-=3;s=clamp(s,-100,100);const quiet30=ret30!=null&&Math.abs(ret30)<2,quiet90=ret90!=null&&Math.abs(ret90)<5;if(quiet30&&quiet90)s=clamp(s,-15,15);const bullMom=(ret30>=2.5||ret90>=6)&&price>e50&&(!e200||price>e200),strongBullMom=(ret30>=8||ret90>=20)&&e20>e50&&(!e200||e50>e200),bearMom=(ret30<=-2.5||ret90<=-6||dd<=-15)&&price<e50,crashMom=(ret30<=-12||ret90<=-25||dd<=-25)&&price<e50&&(!e200||price<e200);let st='RANGE';if(s>=50&&strongBullMom)st='STRONG_BULL';else if(s>=18&&bullMom)st='BULL';else if(s<=-50&&crashMom)st='CRASH';else if(s<=-18&&bearMom)st='BEAR';return{state:st,score:+s.toFixed(2),confidence:clamp(Math.abs(s)*.75+Math.min(25,d.length/8),20,100),reasons:rs.slice(0,7),dataPoints:d.length,ret30,ret90,drawdown90:dd,rsiDaily:rsi}}
-function regimeBuyPolicy(state,threshold){if(state==='STRONG_BULL')return{allowed:true,minScore:threshold,minPattern:2,require15Up:false};if(state==='BULL')return{allowed:true,minScore:threshold,minPattern:2,require15Up:false};if(state==='RANGE')return{allowed:true,minScore:Math.min(95,threshold+7),minPattern:4,require15Up:true};return{allowed:false,minScore:100,minPattern:99,require15Up:true}}
+function regimeBuyPolicy(state,threshold,qualityOn=false){if(state==='STRONG_BULL')return{allowed:true,minScore:threshold,minPattern:2,require15Up:false};if(state==='BULL')return{allowed:true,minScore:threshold,minPattern:2,require15Up:false};if(state==='RANGE')return qualityOn?{allowed:false,minScore:100,minPattern:99,require15Up:true}:{allowed:true,minScore:Math.min(95,threshold+7),minPattern:4,require15Up:true};return{allowed:false,minScore:100,minPattern:99,require15Up:true}}
 function regimeLevels(z,opts){const a=clamp(+z.atrPct||.25,.18,2.5),st=z.marketRegime||'RANGE';let slPct,tp1Pct,tp2Pct,trailPct,partialPct,horizonHours;if(st==='STRONG_BULL'){slPct=clamp(Math.max(opts.sl*1.45,a*2.2),1.05,3.2);tp1Pct=clamp(Math.max(opts.tp*1.65,a*3.4),1.8,5.2);tp2Pct=clamp(Math.max(opts.tp2*1.9,a*6.5),3.6,10);trailPct=clamp(Math.max(.95,a*2.1),.9,3);partialPct=.30;horizonHours=72}else if(st==='BULL'){slPct=clamp(Math.max(opts.sl*1.25,a*1.9),.9,2.8);tp1Pct=clamp(Math.max(opts.tp*1.35,a*2.8),1.5,4.2);tp2Pct=clamp(Math.max(opts.tp2*1.5,a*5),2.8,8);trailPct=clamp(Math.max(.75,a*1.7),.7,2.5);partialPct=.40;horizonHours=48}else if(st==='BEAR'||st==='CRASH'){slPct=clamp(Math.max(.7,a*1.25),.7,1.8);tp1Pct=clamp(Math.max(1,a*1.8),1,2.8);tp2Pct=clamp(Math.max(1.8,a*3),1.8,4.5);trailPct=clamp(Math.max(.45,a),.45,1.5);partialPct=.60;horizonHours=12}else{slPct=clamp(Math.max(opts.sl,a*1.5),.8,2.2);tp1Pct=clamp(Math.max(opts.tp,a*2.2),1.2,3.2);tp2Pct=clamp(Math.max(opts.tp2,a*3.8),2.2,5.5);trailPct=clamp(Math.max(.6,a*1.35),.6,1.9);partialPct=.50;horizonHours=24}return{slPct,tp1Pct,tp2Pct,trailPct,partialPct,horizonHours}}
 function analyzePatterns(k5,asOf){const k=k5.slice(-90);if(k.length<40)return{score:0,bullishConfirmed:false,bearishConfirmed:false,label:'데이터 부족',reasons:[],trend15:'FLAT',setups:[]};const cur=k.at(-1),prev=k.slice(0,-1),v=volumes(k),price=+cur[4],vr=avg(v.slice(-21,-1))?(+cur[5])/avg(v.slice(-21,-1)):1,atrPct=price?ATR(k)/price*100:0,k15=aggregateClosedCandles(k5,FIFTEEN_MIN,asOf),p15=closes(k15),trend15=p15.length>=12?(EMA(p15,5)>EMA(p15,12)&&p15.at(-1)>p15.at(-4)?'UP':EMA(p15,5)<EMA(p15,12)&&p15.at(-1)<p15.at(-4)?'DOWN':'FLAT'):'FLAT',adds=[],add=(name,score,reason,confirmed=true)=>adds.push({name,score,reason,confirmed}),base20=prev.slice(-20),res=Math.max(...base20.map(x=>+x[2])),sup=Math.min(...base20.map(x=>+x[3])),bo=price>res*1.0005&&closeLocation(cur)>=.62&&vr>=1.12,bd=price<sup*.9995&&closeLocation(cur)<=.38&&vr>=1.12;if(bo)add('거래범위 돌파',3,`20봉 저항 돌파·Vol ${vr.toFixed(2)}x`);if(bd)add('거래범위 하향이탈',-3,`20봉 지지 이탈·Vol ${vr.toFixed(2)}x`);const older=prev.slice(-30,-6),recent=prev.slice(-6);if(older.length>=16){const lvl=Math.max(...older.map(x=>+x[2]));if(recent.some(x=>+x[4]>lvl*1.0005)&&+cur[3]<=lvl*1.0035&&price>=lvl*.9995&&closeLocation(cur)>.55)add('돌파 리테스트',4,'이전 저항을 지지로 재확인')}const lower=Math.min(+cur[1],price)-(+cur[3]),upper=(+cur[2])-Math.max(+cur[1],price),body=Math.abs(price-(+cur[1]))||price*.0001;if(+cur[3]<sup*.998&&price>sup&&lower>body*1.2&&vr>=1.05)add('Wyckoff Spring',3,'지지 하회 후 범위 복귀');if(+cur[2]>res*1.002&&price<res&&upper>body*1.2&&vr>=1.05)add('Failed Breakout / Upthrust',-5,'저항 상회 후 종가 재진입');const tri=prev.slice(-24);if(tri.length>=20){const hs=tri.map(x=>+x[2]),ls=tri.map(x=>+x[3]),top4=[...hs].sort((a,b)=>b-a).slice(0,4),bot4=[...ls].sort((a,b)=>a-b).slice(0,4),top=avg(top4),bot=avg(bot4),flatTop=(Math.max(...top4)-Math.min(...top4))/top<=.0045,flatBot=(Math.max(...bot4)-Math.min(...bot4))/bot<=.0045,half=Math.floor(ls.length/2),lowRise=Math.min(...ls.slice(half))/Math.min(...ls.slice(0,half))-1,highFall=Math.max(...hs.slice(half))/Math.max(...hs.slice(0,half))-1;if(flatTop&&lowRise>.002&&price>top*1.0005&&vr>=1.10)add('상승 삼각형',3,'평탄 저항+Higher Low+거래량 돌파');if(flatBot&&highFall<-.002&&price<bot*.9995&&vr>=1.10)add('하락 삼각형',-4,'평탄 지지+Lower High+거래량 이탈');const w=(top/bot-1)*100;if(flatTop&&flatBot&&w>=.5&&w<=3.5){if(price>top*1.0005&&vr>=1.10)add('Flat Base / Rectangle',3,'박스 상단 종가 돌파');if(price<bot*.9995&&vr>=1.10)add('Rectangle Breakdown',-3,'박스 하단 종가 이탈')}}const pl=pivotPoints(prev.slice(-40),'low',2),ph=pivotPoints(prev.slice(-40),'high',2);if(pl.length>=2){const a=pl.at(-2),b=pl.at(-1);if(b.i-a.i>=5&&near(a.v,b.v,.007)){const seg=prev.slice(-40+a.i,-40+b.i+1),neck=seg.length?Math.max(...seg.map(x=>+x[2])):NaN;if(Number.isFinite(neck)&&price>neck*1.0005&&vr>=1.08)add('Double Bottom',3,'W바닥 neckline 종가 돌파')}}if(ph.length>=2){const a=ph.at(-2),b=ph.at(-1);if(b.i-a.i>=5&&near(a.v,b.v,.007)){const seg=prev.slice(-40+a.i,-40+b.i+1),neck=seg.length?Math.min(...seg.map(x=>+x[3])):NaN;if(Number.isFinite(neck)&&price<neck*.9995&&vr>=1.08)add('Double Top',-4,'M천장 neckline 종가 이탈')}}const vcp=prev.slice(-30);if(vcp.length===30){const sg=[vcp.slice(0,10),vcp.slice(10,20),vcp.slice(20,30)],rg=sg.map(z=>avg(z.map(candleRangePct))),vv=sg.map(z=>avg(z.map(x=>+x[5]))),con=rg[0]>rg[1]*1.08&&rg[1]>rg[2]*1.05,dry=vv[0]>vv[1]*1.04&&vv[1]>vv[2]*1.01,piv=Math.max(...vcp.slice(-10).map(x=>+x[2]));if(con&&dry&&price>piv*1.0005&&vr>=1.12)add('VCP 돌파',4,'변동폭·거래량 수축 후 피벗 돌파')}const flag=prev.slice(-16);if(flag.length===16){const is=+flag[0][4],ie=+flag[7][4],imp=pct(ie,is),cons=flag.slice(8),ch=Math.max(...cons.map(x=>+x[2])),cl=Math.min(...cons.map(x=>+x[3])),cv=avg(cons.map(x=>+x[5])),iv=avg(flag.slice(0,8).map(x=>+x[5]));if(imp>Math.max(.8,atrPct*2.5)&&(ch/cl-1)<.018&&cv<iv*.9&&price>ch*1.0005&&vr>=1.08)add('Bull Flag',3,'강한 상승→저거래량 조정→재돌파');if(imp<-Math.max(.8,atrPct*2.5)&&(ch/cl-1)<.018&&cv<iv*.9&&price<cl*.9995&&vr>=1.08)add('Bear Flag',-4,'강한 하락→저거래량 반등→재이탈')}if(trend15==='UP')add('15m Market Structure',1,'15분 EMA/종가 구조 상승',false);if(trend15==='DOWN')add('15m Market Structure',-2,'15분 EMA/종가 구조 하락',false);const raw=adds.reduce((a,x)=>a+x.score,0),score=clamp(raw,-8,8),bull=adds.filter(x=>x.confirmed&&x.score>0),bear=adds.filter(x=>x.confirmed&&x.score<0),strong=[...adds].sort((a,b)=>Math.abs(b.score)-Math.abs(a.score))[0];return{score,bullishConfirmed:bull.length>0,bearishConfirmed:bear.length>0,label:strong?.name||'확정 패턴 없음',reasons:adds.sort((a,b)=>Math.abs(b.score)-Math.abs(a.score)).slice(0,4).map(x=>`${x.name} ${x.score>0?'+':''}${x.score}: ${x.reason}`),trend15,setups:adds}}
-function calcScore(k,b,threshold,asOf,marketRegime,regimeOn=true){
+function calcScore(k,b,threshold,asOf,marketRegime,regimeOn=true,qualityOn=false){
   const p=closes(k),v=volumes(k),bp=closes(b),p15=closed15mCloses(k,asOf),bp15=closed15mCloses(b,asOf);
   const price=p.at(-1),r=RSI(p),br=RSI(bp),relR=r-br,e9=EMA(p,9),e20=EMA(p,20),e50=EMA(p,50),be20=EMA(bp,20),r15=RSI(p15),br15=RSI(bp15),ret=pct(price,p.at(-2)),bret=pct(bp.at(-1),bp.at(-2)),relRet=ret-bret,av=v.slice(-21,-1).reduce((a,x)=>a+x,0)/20,vr=av?v.at(-1)/av:1,rh=Math.max(...k.slice(-21,-1).map(x=>+x[2])),bo=price>=rh*.9995,atrPct=price?ATR(k)/price*100:0,e20Prev=EMA(p.slice(0,-5),20),be20Prev=EMA(bp.slice(0,-5),20),slope=pct(e20,e20Prev),btcSlope=pct(be20,be20Prev),pattern=analyzePatterns(k,asOf);
+  const relR15=r15-br15,extensionPct=e20?pct(price,e20):0,extensionAtr=atrPct>0?Math.max(0,extensionPct)/atrPct:0,impulseRet2=p.length>2?pct(price,p.at(-3)):ret;
+  const antiChase=(extensionAtr>=2.6&&r>=64)||(ret>=Math.max(.75,atrPct*2.0)&&vr>=1.8)||(impulseRet2>=Math.max(1.4,atrPct*3.5)&&r>=68);
+  const altQualityGate=relR15>=0&&e20>=e50*.995;
   let score=0;
   score+=clamp((relR-2)*2.2,0,22);if(e9>e20)score+=12;if(e20>e50)score+=8;if(r15>br15)score+=10;score+=clamp(relRet*3,0,16);score+=clamp((vr-1)*25,0,14);if(bo)score+=10;if(r>=52&&r<=72)score+=8;else if(r>76)score-=10;if(atrPct<.25)score-=6;if(slope>0)score+=2;if(btcSlope>0)score+=2;score=clamp(score,0,100);
-  const crash=bret<=-.9||br<40||bp.at(-1)<be20*.995;
+  const legacyCrash=bret<=-.9||br<40||bp.at(-1)<be20*.995;
+  const hardBtcCrash=bret<=-1.35||(br<30&&bret<=-.6)||bp.at(-1)<be20*.985;
+  const softBtcRisk=legacyCrash&&!hardBtcCrash;
   const shortRegime=br>=48&&br<=68&&bp.at(-1)>be20?'RISK_ON':'RISK_OFF';
   const mr=marketRegime||{state:'RANGE',score:0,reasons:[]};
-  const pol=regimeOn?regimeBuyPolicy(mr.state,threshold):{allowed:true,minScore:threshold,minPattern:2,require15Up:false};
-  const baseBuy=score>=pol.minScore&&shortRegime==='RISK_ON'&&r>=52&&r<=72&&relR>=5&&e9>e20&&vr>=1.15&&relRet>0&&!crash;
+  const pol=regimeOn?regimeBuyPolicy(mr.state,threshold,qualityOn):{allowed:true,minScore:threshold,minPattern:2,require15Up:false};
+  const crashForBuy=qualityOn?hardBtcCrash:legacyCrash;
+  const baseBuy=score>=pol.minScore&&shortRegime==='RISK_ON'&&r>=52&&r<=72&&relR>=5&&e9>e20&&vr>=1.15&&relRet>0&&!crashForBuy;
   const patternGate=pattern.bullishConfirmed&&pattern.score>=pol.minPattern&&pattern.trend15!=='DOWN'&&!pattern.bearishConfirmed;
   const regimeGate=pol.allowed&&(!pol.require15Up||pattern.trend15==='UP');
-  const buy=baseBuy&&patternGate&&regimeGate;
-  return{buy,baseBuy,score,patternScore:pattern.score,patternLabel:pattern.label,pattern,regime:shortRegime,marketRegime:mr.state,marketRegimeScore:mr.score,marketRegimeReasons:mr.reasons||[],price,time:k.at(-1)[0],rsi:r,btcRsi:br,relR,relRet,vr,atrPct,e9,e20,e50,bret,crash,breakout:bo,patternTrend15:pattern.trend15,patternBearish:pattern.bearishConfirmed};
+  const qualityGate=!qualityOn||(altQualityGate&&!antiChase);
+  const buy=baseBuy&&patternGate&&regimeGate&&qualityGate;
+  return{buy,baseBuy,score,patternScore:pattern.score,patternLabel:pattern.label,pattern,regime:shortRegime,marketRegime:mr.state,marketRegimeScore:mr.score,marketRegimeReasons:mr.reasons||[],price,time:k.at(-1)[0],rsi:r,btcRsi:br,relR,relR15,relRet,vr,atrPct,e9,e20,e50,bret,crash:crashForBuy,legacyCrash,hardBtcCrash,softBtcRisk,antiChase,altQualityGate,extensionPct,extensionAtr,breakout:bo,patternTrend15:pattern.trend15,patternBearish:pattern.bearishConfirmed};
 }
 
 
@@ -354,7 +361,7 @@ async function history(symbol,days){
   return arr.slice(-need);
 }
 
-function modeLabel(m){return m==='regime'?'v8.3 Regime+Adaptive Exit':m==='adaptive'?'v8.2 ATR+SELL+Trail':m==='live'?'v8.2 실전 SELL 동기형':'기존 고정 TP/SL'}
+function modeLabel(m){return m==='regimeq'?'v8.3.1 Regime Quality Filter':m==='regime'?'v8.3.0 Regime+Adaptive 비교':m==='adaptive'?'v8.2 ATR+SELL+Trail':m==='live'?'v8.2 실전 SELL 동기형':'기존 고정 TP/SL'}
 function btOptions(overrides={}){
   return Object.assign({
     days:+$('btDays').value,fee:+$('btFee').value,slip:+$('btSlip').value,tp:+$('btTP').value,tp2:+$('btTP2').value,sl:+$('btSL').value,
@@ -370,12 +377,24 @@ function liveExitReason(z,entry,current){
   if(gain>=1&&z.score<55&&z.e9<z.e20)return'PROFIT_PROTECT';
   return null;
 }
-function regimeExitReason(z,entry,current,tp1Pct){
+function regimeExitReasonV83(z,entry,current,tp1Pct){
   const gain=entry?((current/entry)-1)*100:0,st=z.marketRegime||'RANGE';
-  if(z.crash)return'BTC_CRASH';
+  if(z.legacyCrash??z.crash)return'BTC_CRASH';
   if(st==='CRASH')return'MARKET_CRASH';
   const weakTrend=z.e9<z.e20&&z.relRet<0,weakScore=z.score<48&&z.e9<z.e20,bear=z.patternBearish&&z.patternScore<=-4,down15=z.patternTrend15==='DOWN',riskOff=z.regime==='RISK_OFF',wc=[weakTrend,weakScore,bear,down15,riskOff].filter(Boolean).length,reached=gain>=tp1Pct;
   if(st==='STRONG_BULL'){if(bear&&down15&&weakTrend)return'BULL_STRUCTURE_BREAK';if(reached&&wc>=2)return'BULL_PROFIT_PROTECT';return null}
+  if(st==='BULL'){if((bear&&(down15||weakTrend))||(reached&&wc>=2)||wc>=3)return'BULL_WEAKNESS_CONFIRM';return null}
+  if(st==='RANGE'){if(bear)return'RANGE_BEAR_PATTERN';if(riskOff&&weakTrend)return'RANGE_RISKOFF_WEAK';if(weakScore)return'RANGE_SCORE_WEAK';if(reached&&wc>=1)return'RANGE_PROFIT_PROTECT';return null}
+  if(riskOff||weakTrend||bear||down15)return'BEAR_RISK_REDUCE';
+  return null;
+}
+function regimeQualityExitReason(z,entry,current,tp1Pct){
+  const gain=entry?((current/entry)-1)*100:0,st=z.marketRegime||'RANGE';
+  if(z.hardBtcCrash)return'HARD_BTC_CRASH';
+  if(st==='CRASH')return'MARKET_CRASH';
+  const weakTrend=z.e9<z.e20&&z.relRet<0,weakScore=z.score<48&&z.e9<z.e20,bear=z.patternBearish&&z.patternScore<=-4,down15=z.patternTrend15==='DOWN',riskOff=z.regime==='RISK_OFF'||z.softBtcRisk,wc=[weakTrend,weakScore,bear,down15,riskOff].filter(Boolean).length,reached=gain>=tp1Pct;
+  // 상승장에서는 Soft BTC Risk 하나만으로 매도하지 않고 구조 약화를 같이 요구합니다.
+  if(st==='STRONG_BULL'){if(bear&&down15&&weakTrend)return'BULL_STRUCTURE_BREAK';if(reached&&wc>=2)return'BULL_PROFIT_PROTECT';if(z.softBtcRisk&&wc>=3)return'SOFT_BTC_WEAKNESS_CONFIRM';return null}
   if(st==='BULL'){if((bear&&(down15||weakTrend))||(reached&&wc>=2)||wc>=3)return'BULL_WEAKNESS_CONFIRM';return null}
   if(st==='RANGE'){if(bear)return'RANGE_BEAR_PATTERN';if(riskOff&&weakTrend)return'RANGE_RISKOFF_WEAK';if(weakScore)return'RANGE_SCORE_WEAK';if(reached&&wc>=1)return'RANGE_PROFIT_PROTECT';return null}
   if(riskOff||weakTrend||bear||down15)return'BEAR_RISK_REDUCE';
@@ -393,10 +412,10 @@ function alignHistory(k,b){const bm=new Map(b.map(x=>[x[0],x])),a=k.filter(x=>bm
 function stateAt(a,bm,idx,opts,daily=[]){
   const ks=a.slice(Math.max(0,idx-179),idx+1),bs=ks.map(x=>bm.get(x[0])).filter(Boolean);
   if(ks.length<60||bs.length<60)return null;
-  const asOf=a[idx][0]+FIVE_MIN,mr=opts.regime==='off'?{state:'RANGE',score:0,reasons:[]}:regimeAt(daily,asOf),z=calcScore(ks,bs,opts.threshold,asOf,mr,opts.regime!=='off');
+  const asOf=a[idx][0]+FIVE_MIN,mr=opts.regime==='off'?{state:'RANGE',score:0,reasons:[]}:regimeAt(daily,asOf),qualityOn=opts.mode==='regimeq',z=calcScore(ks,bs,opts.threshold,asOf,mr,opts.regime!=='off',qualityOn);
   if(opts.pattern==='off'){
     if(opts.regime==='off')z.buy=z.baseBuy;
-    else{const pol=regimeBuyPolicy(mr.state,opts.threshold);z.buy=z.baseBuy&&pol.allowed&&(!pol.require15Up||z.patternTrend15==='UP')}
+    else{const pol=regimeBuyPolicy(mr.state,opts.threshold,qualityOn);z.buy=z.baseBuy&&pol.allowed&&(!pol.require15Up||z.patternTrend15==='UP')&&(!qualityOn||(z.altQualityGate&&!z.antiChase))}
   }
   return z;
 }
@@ -408,8 +427,8 @@ function finishTrade(symbol,z0,entry,entryIndex,exit,exitIndex,reason,opts,extra
 function runTrade(symbol,a,bm,i,endIdx,opts,z0,daily=[]){
   const ei=i+1;if(ei>=endIdx)return null;
   const entryTime=a[ei][0],entry=+a[ei][1]*(1+opts.slip/100);
-  const regimeLv=opts.mode==='regime'?regimeLevels(z0,opts):null;
-  const horizon=opts.mode==='legacy'?72:opts.mode==='regime'?Math.max(48,Math.round(regimeLv.horizonHours*12)):288,lastJ=Math.min(endIdx-1,ei+horizon-1);
+  const regimeLv=(opts.mode==='regime'||opts.mode==='regimeq')?regimeLevels(z0,opts):null;
+  const horizon=opts.mode==='legacy'?72:(opts.mode==='regime'||opts.mode==='regimeq')?Math.max(48,Math.round(regimeLv.horizonHours*12)):288,lastJ=Math.min(endIdx-1,ei+horizon-1);
   if(opts.mode==='legacy'){
     const T=entry*(1+opts.tp/100),S=entry*(1-opts.sl/100);
     for(let j=ei;j<=lastJ;j++){
@@ -430,7 +449,7 @@ function runTrade(symbol,a,bm,i,endIdx,opts,z0,daily=[]){
     const ex=+a[lastJ][4]*(1-opts.slip/100);
     return finishTrade(symbol,z0,entry,ei,ex,lastJ,'HORIZON_24H',opts,{entryTime,exitTime:a[lastJ][0]+FIVE_MIN,slPct:opts.sl});
   }
-  if(opts.mode==='regime'){
+  if(opts.mode==='regime'||opts.mode==='regimeq'){
     const lv=regimeLv,S0=entry*(1-lv.slPct/100),T1=entry*(1+lv.tp1Pct/100),T2=entry*(1+lv.tp2Pct/100),part=lv.partialPct;
     let partHit=false,tp2Hit=false,exit1=null,highWater=entry;
     for(let j=ei;j<=lastJ;j++){
@@ -444,7 +463,7 @@ function runTrade(symbol,a,bm,i,endIdx,opts,z0,daily=[]){
         highWater=Math.max(highWater,hi);if(hi>=T2)tp2Hit=true;
       }
       const z=stateAt(a,bm,j,opts,daily);if(!z)continue;
-      const why=regimeExitReason(z,entry,cl,lv.tp1Pct);
+      const why=opts.mode==='regimeq'?regimeQualityExitReason(z,entry,cl,lv.tp1Pct):regimeExitReasonV83(z,entry,cl,lv.tp1Pct);
       if(why){const xj=Math.min(j+1,endIdx-1),raw=(xj>j?+a[xj][1]:cl)*(1-opts.slip/100),xt=xj>j?a[xj][0]:a[j][0]+FIVE_MIN,av=partHit?part*exit1+(1-part)*raw:raw;return finishTrade(symbol,z0,entry,ei,av,xj,partHit?`REGIME_TP1+${why}`:why,opts,{entryTime,exitTime:xt,...lv,tp1Hit:partHit,tp2Hit});}
     }
     const last=+a[lastJ][4]*(1-opts.slip/100),av=partHit?part*exit1+(1-part)*last:last;
@@ -494,7 +513,7 @@ async function loadRuns(coin,opts){const cs=coin==='ALL'?COINS:[coin],[btc,daily
 function renderDetails(out,opts){
   const all=portfolioTrades(out),s=stats(all);renderBT(s);
   const avgDyn=all.filter(x=>Number.isFinite(x.slPct)).reduce((a,x)=>({n:a.n+1,sl:a.sl+x.slPct,t1:a.t1+(x.tp1Pct||0),t2:a.t2+(x.tp2Pct||0),tr:a.tr+(x.trailPct||0)}),{n:0,sl:0,t1:0,t2:0,tr:0});
-  $('btModeStats').innerHTML=`<b>검증 방식: ${modeLabel(opts.mode)}</b><br><span class="small">Score ≥ ${opts.threshold} · Pattern ${opts.pattern==='off'?'OFF':'ON'} · Regime ${opts.regime==='off'?'OFF':'ON'} · 편도 수수료 ${opts.fee}% · 편도 슬리피지 ${opts.slip}%${avgDyn.n&&(opts.mode==='adaptive'||opts.mode==='regime')?` · 실제 진입별 평균 동적 SL ${(avgDyn.sl/avgDyn.n).toFixed(2)}% / TP1 ${(avgDyn.t1/avgDyn.n).toFixed(2)}% / TP2 ${(avgDyn.t2/avgDyn.n).toFixed(2)}% / Trail ${(avgDyn.tr/avgDyn.n).toFixed(2)}%`:''}. 과거 성과는 미래 결과를 보장하지 않습니다.</span>`;
+  $('btModeStats').innerHTML=`<b>검증 방식: ${modeLabel(opts.mode)}</b><br><span class="small">Score ≥ ${opts.threshold} · Pattern ${opts.pattern==='off'?'OFF':'ON'} · Regime ${opts.regime==='off'?'OFF':'ON'} · 편도 수수료 ${opts.fee}% · 편도 슬리피지 ${opts.slip}%${avgDyn.n&&(opts.mode==='adaptive'||opts.mode==='regime'||opts.mode==='regimeq')?` · 실제 진입별 평균 동적 SL ${(avgDyn.sl/avgDyn.n).toFixed(2)}% / TP1 ${(avgDyn.t1/avgDyn.n).toFixed(2)}% / TP2 ${(avgDyn.t2/avgDyn.n).toFixed(2)}% / Trail ${(avgDyn.tr/avgDyn.n).toFixed(2)}%`:''}. 과거 성과는 미래 결과를 보장하지 않습니다.</span>`;
   $('btCoinStats').innerHTML='<h3>코인별 독립 성과</h3>'+table(['코인','표본','거래','승률','기대값','PF','MDD','복리'],out.map(x=>{const q=stats(x.trades);return[x.symbol+'/KRW',q.n>=20?'OK':'⚠️ 적음',q.n,q.n?q.win.toFixed(1)+'%':'—',q.n?q.avg.toFixed(3)+'%':'—',q.n?(q.pf===Infinity?'∞':q.pf.toFixed(2)):'—',q.n?q.mdd.toFixed(2)+'%':'—',q.n?q.net.toFixed(2)+'%':'—']}));
   $('btScoreStats').innerHTML='<h3>Score 구간 · 포트폴리오 1포지션 기준</h3>'+table(['구간','거래','승률','기대값','PF'],[[75,80],[80,85],[85,90],[90,100.0001]].map(([a,b],i)=>{const q=stats(all.filter(x=>x.score>=a&&x.score<b));const label=i<3?`${a}-${b-1}`:'90-100';return[label,q.n,q.n?q.win.toFixed(1)+'%':'—',q.n?q.avg.toFixed(3)+'%':'—',q.n?(q.pf===Infinity?'∞':q.pf.toFixed(2)):'—']}));
   $('btTimeStats').innerHTML='<h3>시간대(KST)</h3>'+table(['KST','거래','승률','기대값'],group(all,x=>String((new Date(x.time).getUTCHours()+9)%24).padStart(2,'0')).map(x=>[x.k,x.n,x.win.toFixed(1)+'%',x.avg.toFixed(3)+'%']));
@@ -506,7 +525,7 @@ function quality(q){if(!q.n)return-999;const sample=Math.min(1,q.n/30),pf=Math.m
 function judge(q,wf){if(!q||q.n<15)return'⚪ 표본 부족: 최소 15회, 가능하면 30회 이상의 거래가 필요합니다.';const qs=quality(q);if(wf&&wf.n>=10&&wf.avg>0&&wf.net>0&&wf.pf>1&&qs>=60)return`🟢 연구 후보: 안정성 ${qs.toFixed(0)}/100 · 검증 기대값 ${wf.avg.toFixed(3)}% · 검증 복리 ${wf.net.toFixed(2)}%`;if(qs>=65&&q.avg>0&&q.pf>1&&q.mdd<12)return`🟡 연구 우수: 안정성 ${qs.toFixed(0)}/100. 별도 미래구간과 페이퍼 트레이딩 확인이 필요합니다.`;return`🔴 보류: 안정성 ${qs.toFixed(0)}/100. 수익성 또는 리스크가 충분히 확인되지 않았습니다.`}
 function researchCandidates(base){
   const ths=[75,80,85,90],out=[];
-  if(base.mode==='regime'){for(const th of ths)out.push({...base,threshold:th,profile:'Regime Dynamic'});
+  if(base.mode==='regime'||base.mode==='regimeq'){for(const th of ths)out.push({...base,threshold:th,profile:base.mode==='regimeq'?'Regime Quality':'Regime Dynamic'});
   }else if(base.mode==='adaptive'){
     const profiles=[['좁게',1.2,2.0,.8],['균형',1.6,2.5,1.1],['넓게',2.0,3.0,1.4]];
     for(const th of ths)for(const [name,atrSl,atrTp,trail] of profiles)out.push({...base,threshold:th,atrSl,atrTp,trail,profile:name});

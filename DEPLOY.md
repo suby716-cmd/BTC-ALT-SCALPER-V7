@@ -1,6 +1,6 @@
-# BTC ALT REGIME TRADER v8.3.0 배포 체크리스트
+# BTC ALT REGIME TRADER v8.3.1 배포 체크리스트
 
-이 문서는 기존 Worker/GitHub Pages를 v8.3.0 Regime-Adaptive Manual Trader로 교체할 때 필요한 작업을 순서대로 정리한 것입니다. 자동 주문은 포함하지 않습니다.
+이 문서는 기존 Worker/GitHub Pages를 v8.3.1 Regime Quality Manual Trader로 교체할 때 필요한 작업을 순서대로 정리한 것입니다. 자동 주문은 포함하지 않습니다.
 
 ## 1. GitHub 저장소에 파일 업로드
 
@@ -107,7 +107,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.3.0",
+  "version": "v8.3.1",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -116,7 +116,7 @@ https://YOUR-WORKER.workers.dev/health
 
 `kv:false`이면 자동 알림 중복 방지와 보유 관리가 안전하지 않으므로 먼저 KV를 연결하세요.
 
-v8.3.0에서는 `/health`의 `externalContext.manualOnly=true`, `adaptiveProfitReviews=true`, `autoTrading=false`도 확인할 수 있습니다. 이 값들은 **Telegram 수동매매 알림 전용**이고 주문 API가 없다는 의미입니다.
+v8.3.1에서는 `/health`의 `externalContext.manualOnly=true`, `adaptiveProfitReviews=true`, `autoTrading=false`도 확인할 수 있습니다. 이 값들은 **Telegram 수동매매 알림 전용**이고 주문 API가 없다는 의미입니다.
 
 ## 8. GitHub Pages에서 연결
 
@@ -135,7 +135,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 ## 9. v8의 중요한 동작 차이
 
-### v8.3 수동매매 알림 종류
+### v8.3.1 수동매매 알림 종류
 
 - `BUY REVIEW`: 신규 진입 검토. 실제 주문 없음.
 - `TP1 PARTIAL REVIEW`: 동적 TP1 도달 시 1회. 부분익절 참고비율과 Runner 계획 표시.
@@ -177,7 +177,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 보유/매매 데이터는 Cloudflare KV에 저장되어 기기 간 공유됩니다. Worker URL/PIN은 각 브라우저 로컬 저장이므로 새 기기에서는 다시 입력해야 합니다. Cloudflare KV는 전 세계 엣지에 전파되는 저장소라 아주 짧은 동기화 지연이 생길 수 있습니다.
 
-장부 손익은 v8.1.4 당시에는 거래소 수수료 제외 기준이었고, v8.3.0부터는 `TRADING_FEE_PERCENT` 기준으로 매수·매도 수수료를 추정 반영합니다.
+장부 손익은 v8.1.4 당시에는 거래소 수수료 제외 기준이었고, v8.3.1부터는 `TRADING_FEE_PERCENT` 기준으로 매수·매도 수수료를 추정 반영합니다.
 
 ## v8.1.4 백테스트 확인
 
@@ -195,17 +195,17 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 백테스트/최적화 값은 실시간 Worker 설정에 자동 적용되지 않습니다. 실전 전략값 변경은 별도 검증 후 `wrangler.toml`/Cloudflare Variables를 수정하여 재배포해야 합니다.
 
-## v8.3.0 Regime / 동적 Exit 확인
+## v8.3.1 Regime / 동적 Exit 확인
 
 배포 후 다음을 확인합니다.
 
-1. `/health`에서 `version: v8.3.0`, `strategyVersion: krw-5m-v8.3-regime-adaptive-manual`, `kv:true`, Telegram/PIN true 확인
+1. `/health`에서 `version: v8.3.1`, `strategyVersion: krw-5m-v8.3.1-regime-quality-manual`, `kv:true`, Telegram/PIN true 확인
 2. 대시보드 상단 `대세 Regime`이 `STRONG_BULL / BULL / RANGE / BEAR / CRASH` 중 하나로 표시되는지 확인
 3. 수동 `지금 조회(알림X)`에서 각 코인 행에 Regime, Pattern, 동적 Trade Plan이 표시되는지 확인
 4. 실제 보유 등록 시 당시 Regime과 동적 SL/TP 계획이 장부에 저장되는지 확인
 5. `BEAR/CRASH`에서는 신규 BUY Telegram이 차단되는지, `RANGE`에서는 강화된 진입조건이 적용되는지 확인
 6. `STRONG_BULL/BULL`에서는 단기 Risk-Off 하나만으로 SELL이 발생하지 않고 복수 약화 조건 또는 긴급 위험이 필요한지 확인
-7. 백테스트에서 같은 기간·같은 수수료로 `v8.2 비교 / Regime OFF`와 `v8.3 Regime+Adaptive Exit / Regime ON`을 비교
+7. 백테스트에서 같은 기간·같은 수수료로 `v8.2 비교 / Regime OFF`와 `v8.3.1 Regime Quality Filter / Regime ON`을 비교
 
 ### TP1/TP2/SL 해석
 
@@ -246,7 +246,7 @@ CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
 
 이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
 
-`/health`에서 v8.3.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+`/health`에서 v8.3.1, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
 
 ### Polymarket
 
@@ -277,7 +277,7 @@ Polymarket의 market ID(숫자)를 등록하고, 해당 시장에서 코인에 �
 
 ## v8.1.4 안정화 확인
 
-- `/health`에서 `version: v8.3.0`, `kv:true`, Telegram/PIN true 확인
+- `/health`에서 `version: v8.3.1`, `kv:true`, Telegram/PIN true 확인
 - 외부 Context 새로고침 후 9개 중 6개 이상이면 `부분 데이터`로 계산되어야 함
 - BLS가 429를 반환해도 이미 저장된 최근 정상 캐시가 있으면 계속 사용하며, 12시간 이내에는 반복 호출하지 않음
 - OVX 공개 CSV가 2열/다른 value 열 이름이어도 파서가 수치열을 탐색

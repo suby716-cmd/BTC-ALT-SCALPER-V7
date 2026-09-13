@@ -1,9 +1,25 @@
-# BTC ALT REGIME TRADER v8.3.0
+# BTC ALT REGIME TRADER v8.3.1
 
 Upbit KRW 시장을 대상으로 **BTC 완료 일봉 Market Regime + 15분 구조 + 5분 기술·패턴 + 외부 Context**를 결합하고, Cloudflare Worker Cron이 24시간 감시하여 Telegram으로 BUY/SELL **검토 알림**만 보내는 수동매매 보조 시스템입니다.
 
 > 이 프로젝트는 주문을 자동 실행하지 않습니다. Telegram 알림을 바탕으로 사용자가 직접 판단하는 수동매매 보조 도구입니다.
 
+
+
+## v8.3.1 Regime Quality Filter
+
+v8.3.0의 동일 90일 ALL 검증에서 `PF 0.92 / 복리 약 -6% / MDD 약 11%`까지 개선된 뒤, Regime별로 보면 `STRONG_BULL PF 1.11`, `BULL PF 0.97`, `RANGE PF 0.54`로 RANGE 구간이 손실의 핵심임이 확인되었습니다. Score 구간도 75~79가 오히려 PF 1.36으로 가장 좋고 80 이상이 악화되어, 단순히 Score 임계값을 높이는 대신 **시장 품질 필터**를 강화했습니다.
+
+### 핵심 변경
+
+- `RANGE`: 신규 BUY Telegram을 완전 차단하고 WATCH/분석만 유지
+- `Alt Relative Strength Quality`: 15분 RSI의 BTC 대비 상대강도와 중기 EMA 품질을 추가 확인
+- `Anti-Chase`: EMA20 대비 ATR 이격, 1~2봉 급등, 거래량 폭증을 이용해 과열 추격 진입을 WAIT 처리
+- `Hard / Soft BTC Risk` 분리: 진짜 급락만 긴급 SELL 검토, 상승장의 단기 Risk-Off는 다른 약화 신호와 함께 확인
+- 백테스트에 `v8.3.1 Regime Quality Filter`와 `v8.3.0 Regime+Adaptive 비교`를 동시에 남겨 동일 90일에서 직접 비교 가능
+- 자동 주문은 계속 미지원. Telegram 수동매매 검토 방식 유지
+
+1차 목표는 동일 90일 조건에서 v8.3.0의 `PF 0.92`를 v8.3.1이 `PF > 1.0`으로 넘기는지 확인하는 것입니다. 결과가 개선되지 않으면 해당 필터를 실전 우위로 간주하지 않습니다.
 
 ## v8.3.0 Market Regime + Regime-Adaptive Exit
 
@@ -25,7 +41,8 @@ Upbit 일봉은 **00:00 KST** 기준으로 완료 여부를 판단해 현재 진
 ### 2) Regime별 신규 BUY 정책
 
 - `STRONG_BULL/BULL`: 기존 Score + Pattern 확인을 통과하면 BUY 검토 가능
-- `RANGE`: Score 기준을 기본보다 +7 높이고 Pattern +4 이상, 15분 구조 UP 요구
+- `RANGE` (v8.3.0 비교모드): Score 기준을 기본보다 +7 높이고 Pattern +4 이상, 15분 구조 UP 요구
+- `RANGE` (v8.3.1 실전모드): 신규 BUY 차단, WATCH/분석만 유지
 - `BEAR/CRASH`: 신규 BUY Telegram 차단. 반등 패턴을 “대세 상승 전환”으로 오인하지 않도록 함
 
 ### 3) 고정 TP1/TP2/SL을 Regime + ATR 적응형으로 교체
@@ -216,7 +233,7 @@ FRED 의존을 제거하고 **미국 정부·공식 거래소의 공개 원천�
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.3.0입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.3.1입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets

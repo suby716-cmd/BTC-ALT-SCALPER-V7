@@ -1,5 +1,5 @@
-const VERSION = 'v8.3.0';
-const STRATEGY_VERSION = 'krw-5m-v8.3-regime-adaptive-manual';
+const VERSION = 'v8.3.1';
+const STRATEGY_VERSION = 'krw-5m-v8.3.1-regime-quality-manual';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
 const UPBIT_DAY_BASE = 'https://api.upbit.com/v1/candles/days';
@@ -62,7 +62,7 @@ export default {
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
         coins: COINS,
-        externalContext: { publicMacro: true, macroProviders: ['U.S. Treasury','Federal Reserve Board','Cboe','BLS','EIA'], polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true, regimeEngine: true, adaptiveProfitReviews: true, manualOnly: true, autoTrading: false },
+        externalContext: { publicMacro: true, macroProviders: ['U.S. Treasury','Federal Reserve Board','Cboe','BLS','EIA'], polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true, regimeEngine: true, regimeQualityFilter: true, rangeBuyBlocked: true, antiChase: true, altRelativeStrength: true, hardSoftBtcCrash: true, adaptiveProfitReviews: true, manualOnly: true, autoTrading: false },
         note: '수동매매 전용입니다. Telegram은 BUY/SELL 검토 알림만 보내며 주문은 자동 실행하지 않습니다. /scan은 조회 전용입니다.'
       });
     }
@@ -670,7 +670,9 @@ function regimeBuyPolicy(state,cfg) {
   if (!cfg.regimeEngine) return {allowed:true,minScore:cfg.minScore,minPattern:cfg.patternBuyMinScore,require15Up:false,label:'REGIME_OFF'};
   if (state==='STRONG_BULL') return {allowed:true,minScore:cfg.minScore,minPattern:cfg.patternBuyMinScore,require15Up:false,label:'강한 상승장'};
   if (state==='BULL') return {allowed:true,minScore:cfg.minScore,minPattern:Math.max(cfg.patternBuyMinScore,2),require15Up:false,label:'상승장'};
-  if (state==='RANGE') return {allowed:true,minScore:Math.min(95,cfg.minScore+7),minPattern:Math.max(4,cfg.patternBuyMinScore+1),require15Up:true,label:'횡보장·진입 강화'};
+  // v8.3.1: 90일 검증에서 RANGE PF 0.54 / 기대값 -0.335%가 확인되어 신규 BUY를 차단합니다.
+  // 분석/WATCH는 계속 표시하지만 Telegram BUY는 보내지 않습니다.
+  if (state==='RANGE') return {allowed:false,minScore:100,minPattern:99,require15Up:true,label:'횡보장·신규 BUY 차단'};
   return {allowed:false,minScore:100,minPattern:99,require15Up:true,label:state==='CRASH'?'급락장·신규 BUY 차단':'하락장·신규 BUY 차단'};
 }
 
@@ -715,6 +717,16 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null, marketRegime
   const atrPct = price ? ATR(k5) / price * 100 : 0;
   const slope5 = pct(e20, e20Prev), btcSlope = pct(be20, be20Prev);
   const pattern = analyzePatterns(k5, asOf);
+  const relR15 = r15 - br15;
+  const extensionPct = e20 ? pct(price, e20) : 0;
+  const extensionAtr = atrPct > 0 ? Math.max(0, extensionPct) / atrPct : 0;
+  const impulseRet2 = p.length > 2 ? pct(price, p.at(-3)) : ret;
+  // v8.3.1 Anti-Chase: 이미 크게 뻗은 봉/EMA 이격에서는 좋은 점수여도 재돌파·리테스트를 기다립니다.
+  const antiChase = (extensionAtr >= 2.6 && r >= 64)
+    || (ret >= Math.max(.75, atrPct * 2.0) && vr >= 1.8)
+    || (impulseRet2 >= Math.max(1.4, atrPct * 3.5) && r >= 68);
+  // BTC보다 15분 상대강도가 뒤처지거나 중기 EMA가 크게 역배열인 알트는 상승장이어도 추격하지 않습니다.
+  const altQualityGate = relR15 >= 0 && e20 >= e50 * .995;
 
   let score = 0;
   const reasons = [];
@@ -731,7 +743,10 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null, marketRegime
   if (btcSlope > 0) score += 2;
   score = clamp(score, 0, 100);
 
-  const crash = bret <= -0.9 || br < 40 || bp.at(-1) < be20 * 0.995;
+  // v8.3.1: 단기 약세와 진짜 급락을 분리합니다. 상승장에서 단순 Risk-Off 한 번으로 긴급 SELL하지 않습니다.
+  const legacyCrash = bret <= -0.9 || br < 40 || bp.at(-1) < be20 * 0.995;
+  const hardCrash = bret <= -1.35 || (br < 30 && bret <= -0.6) || bp.at(-1) < be20 * 0.985;
+  const softBtcRisk = legacyCrash && !hardCrash;
   const shortRegime = br >= 48 && br <= 68 && bp.at(-1) > be20 ? 'RISK_ON' : 'RISK_OFF';
   const mr = marketRegime || { state:'RANGE', score:0, confidence:0, reasons:[] };
   const policy = regimeBuyPolicy(mr.state,cfg);
@@ -743,14 +758,18 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null, marketRegime
   const contextBlocked = contextScore <= cfg.contextBlockThreshold || !!external?.severeRisk;
   const patternGate = !cfg.patternConfirmation || (pattern.bullishConfirmed && patternScore >= policy.minPattern && pattern.trend15 !== 'DOWN' && !pattern.bearishConfirmed);
   const regimeGate = policy.allowed && (!policy.require15Up || pattern.trend15 === 'UP');
-  // v8.3: 하락/급락장에서는 반등 패턴이 보여도 신규 BUY Telegram을 차단합니다.
-  const hardTech = techScore >= policy.minScore && shortRegime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
-  const hard = hardTech && patternGate && regimeGate && !contextBlocked;
-  const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
+  // v8.3.1 Quality Gate: RANGE 차단 + 알트 상대강도 + 추격진입 방지.
+  const qualityGate = altQualityGate && !antiChase;
+  const hardTech = techScore >= policy.minScore && shortRegime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !hardCrash;
+  const hard = hardTech && patternGate && regimeGate && qualityGate && !contextBlocked;
+  const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !hardCrash ? 'WATCH' : 'IDLE');
+  if (antiChase) reasons.push(`추격진입 대기 · EMA20 이격 ${rnd(extensionPct,2)}% / ${rnd(extensionAtr,1)} ATR`);
+  if (!altQualityGate) reasons.push(`알트 상대강도 부족 · 15m RSI-BTC ${rnd(relR15)}p`);
+  if (!policy.allowed) reasons.push(policy.label);
   const contextDataPenalty = clamp(Number(external?.confidencePenalty)||0, 0, 15);
   const regimeConfidenceAdj = mr.state==='STRONG_BULL'?10:mr.state==='BULL'?6:mr.state==='RANGE'?0:mr.state==='BEAR'?-10:-18;
   const confidence = clamp(techScore * 0.60 + patternScore * 2.6 + contextScore * 1.0 + regimeContribution * 2 + regimeConfidenceAdj + (shortRegime === 'RISK_ON' ? 6 : -5) + (r15 > br15 ? 4 : 0) + (pattern.trend15 === 'UP' ? 4 : pattern.trend15 === 'DOWN' ? -6 : 0) - contextDataPenalty, 0, 100);
-  const risk = crash || mr.state==='CRASH' || mr.state==='BEAR' || r > 76 || contextScore <= -8 || external?.severeRisk || pattern.bearishConfirmed || patternScore <= cfg.patternSellScore ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
+  const risk = hardCrash || softBtcRisk || mr.state==='CRASH' || mr.state==='BEAR' || r > 76 || contextScore <= -8 || external?.severeRisk || pattern.bearishConfirmed || patternScore <= cfg.patternSellScore ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
   const tradePlan = tradePlanFor(mr.state, atrPct, cfg);
 
   return {
@@ -799,7 +818,14 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null, marketRegime
     breakout,
     atrPct: rnd(atrPct, 3),
     regime: shortRegime,
-    btcCrash: crash,
+    btcCrash: hardCrash,
+    btcSoftRisk: softBtcRisk,
+    btcLegacyCrash: legacyCrash,
+    antiChase,
+    altQualityGate,
+    rsi15Rel: rnd(relR15),
+    ema20ExtensionPct: rnd(extensionPct,3),
+    extensionAtr: rnd(extensionAtr,2),
     tradePlan,
     tp1: price * (1 + tradePlan.tp1Pct / 100),
     tp2: price * (1 + tradePlan.tp2Pct / 100),

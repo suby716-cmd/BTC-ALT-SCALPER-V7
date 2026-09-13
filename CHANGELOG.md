@@ -1,5 +1,16 @@
 # Changelog
 
+## v8.3.1 Regime Quality Filter
+
+- 90일 Regime별 결과에서 RANGE `PF 0.54 / 기대값 -0.335%`가 확인되어 RANGE 신규 BUY 차단
+- Score 75~79가 상위 Score 구간보다 좋았던 결과를 반영해 단순 Score 상향 대신 Anti-Chase 도입
+- EMA20 대비 ATR 이격, 단기 급등폭, 거래량 폭증으로 과열 추격 진입을 WAIT 처리
+- 알트 15분 RSI-BTC 상대강도와 중기 EMA 품질 필터 추가
+- BTC 단기 약세를 Hard Crash와 Soft Risk로 분리해 STRONG_BULL/BULL의 과민 SELL 완화
+- 백테스트에 v8.3.1 / v8.3.0 직접 비교 모드 추가
+- Score 기본값 75 유지
+- 자동 주문 없음, Telegram 수동매매 검토 전용 유지
+
 ## v8.3.0 Regime-Adaptive Manual Trader
 
 - BTC 완료 일봉 기반 `STRONG_BULL / BULL / RANGE / BEAR / CRASH` Market Regime Engine 추가
