@@ -1,3 +1,22 @@
+# Changelog
+
+## v8.3.0 Regime-Adaptive Manual Trader
+
+- BTC 완료 일봉 기반 `STRONG_BULL / BULL / RANGE / BEAR / CRASH` Market Regime Engine 추가
+- 20/50/200 EMA, 30/90일 수익률, 90일 drawdown, 일봉 RSI를 Regime Score(-100~+100)로 수치화
+- `BEAR/CRASH` 신규 BUY Telegram 차단, `RANGE` 진입기준 강화
+- 고정 TP1/TP2/SL 대신 코인 5분 ATR + Regime 기반 동적 SL/TP/Trail/보유시간/부분익절 비율 계산
+- `STRONG_BULL/BULL`에서 단기 BTC Risk-Off 하나만으로 SELL하지 않고 복수 추세 훼손 조건 요구
+- 동적 SL/CRASH/외부 severe risk는 긴급 SELL 검토로 분류하고 5분 재확인 허용
+- 신규 보유 등록 시 당시 Regime과 동적 Risk Plan을 KV에 저장
+- 수동 보유 포지션의 완료 5분봉 종가 Peak 추적, TP1/TP2 1회성 `PROFIT REVIEW` 알림, TP1 이후 Runner Trail SELL 검토 추가
+- TP1 부분매도는 자동 실행하지 않으며 장부에서 실제 매도수량을 기록하면 남은 수량을 계속 관리
+- 장부 실현·미실현 손익에 편도 `TRADING_FEE_PERCENT` 수수료 추정 반영
+- 백테스트에 `v8.3 Regime+Adaptive Exit`와 `Regime ON/OFF` 비교 추가
+- BTC 일봉 백테스트 프록시 추가
+- Upbit 일봉 완료 기준을 UTC 자정이 아닌 **00:00 KST**로 수정하여 진행 중인 일봉이 Regime에 섞이지 않도록 보강
+- 주문 자동 실행 없음: Telegram 수동매매 검토 방식 유지
+
 # CHANGELOG
 
 ## v8.2.0 Pattern Confirmation

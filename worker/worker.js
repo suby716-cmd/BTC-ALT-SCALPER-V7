@@ -1,12 +1,14 @@
-const VERSION = 'v8.2.0';
-const STRATEGY_VERSION = 'krw-5m-v8.2-pattern-confirm';
+const VERSION = 'v8.3.0';
+const STRATEGY_VERSION = 'krw-5m-v8.3-regime-adaptive-manual';
 const COINS = ['ETH','SOL','XRP','HBAR','ONDO','LINK','AVAX','DOGE','SUI','TAO','UNI','AAVE'];
 const UPBIT_CANDLE_BASE = 'https://api.upbit.com/v1/candles/minutes';
+const UPBIT_DAY_BASE = 'https://api.upbit.com/v1/candles/days';
 const POS_KEY = 'positions';
 const TRADE_HISTORY_KEY = 'trade-history:v1';
 const MAX_TRADE_HISTORY = 300;
 const LAST_RESULT_KEY = 'runtime:last-result';
 const LAST_ERROR_KEY = 'runtime:last-error';
+const REGIME_KEY = 'market-regime:v1';
 const CONTEXT_CACHE_KEY = 'context:auto:v1';
 const MANUAL_EVENTS_KEY = 'context:manual-events:v1';
 const PREDICTION_CONFIG_KEY = 'context:prediction-config:v1';
@@ -60,8 +62,8 @@ export default {
         pinConfigured: !!env.SCALPER_PIN,
         strategy: strategyConfig(env),
         coins: COINS,
-        externalContext: { publicMacro: true, macroProviders: ['U.S. Treasury','Federal Reserve Board','Cboe','BLS','EIA'], polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true },
-        note: 'Telegram 자동 신호는 Cron에서만 발송됩니다. /scan은 조회 전용입니다.'
+        externalContext: { publicMacro: true, macroProviders: ['U.S. Treasury','Federal Reserve Board','Cboe','BLS','EIA'], polymarket: true, cryptoPanicConfigured: !!env.CRYPTOPANIC_AUTH_TOKEN, manualEvents: true, regimeEngine: true, adaptiveProfitReviews: true, manualOnly: true, autoTrading: false },
+        note: '수동매매 전용입니다. Telegram은 BUY/SELL 검토 알림만 보내며 주문은 자동 실행하지 않습니다. /scan은 조회 전용입니다.'
       });
     }
 
@@ -69,7 +71,7 @@ export default {
 
     if (req.method === 'POST' && u.pathname === '/test') {
       requireTelegram(env);
-      await sendTelegram(env, `🧪 BTC ALT SCALPER ${VERSION}\nTelegram 연결 테스트 성공\n자동 감시: Cloudflare Cron 5분`);
+      await sendTelegram(env, `🧪 BTC ALT REGIME TRADER ${VERSION}\nTelegram 연결 테스트 성공\n수동매매 알림 전용 · Cloudflare Cron 5분`);
       return json({ ok: true });
     }
 
@@ -87,11 +89,29 @@ export default {
         const quantityRaw = body.quantity == null || body.quantity === '' ? old.quantity : Number(body.quantity);
         const quantity = Number.isFinite(Number(quantityRaw)) && Number(quantityRaw) > 0 ? Number(quantityRaw) : null;
         if (body.quantity != null && body.quantity !== '' && quantity == null) return json({ ok: false, error: '올바른 보유 수량을 입력하세요.' }, 400);
+        const rp = body.riskPlan && typeof body.riskPlan === 'object' ? body.riskPlan : old.riskPlan;
+        const riskPlan = rp ? {
+          slPct: clamp(Number(rp.slPct)||0, .3, 8),
+          tp1Pct: clamp(Number(rp.tp1Pct)||0, .3, 15),
+          tp2Pct: clamp(Number(rp.tp2Pct)||0, .5, 25),
+          trailPct: clamp(Number(rp.trailPct)||0, .2, 8),
+          partialPct: clamp(Number(rp.partialPct)||.5, .1, .9),
+          horizonHours: clampInt(Number(rp.horizonHours)||24, 4, 168),
+          state: String(rp.state || body.marketRegime || old.marketRegimeAtEntry || 'RANGE')
+        } : null;
+        const addedAt = Number(old.addedAt) || Number(body.boughtAt) || Date.now();
         positions[symbol] = {
           entry,
           quantity,
-          addedAt: Number(old.addedAt) || Number(body.boughtAt) || Date.now(),
-          updatedAt: Date.now()
+          riskPlan,
+          marketRegimeAtEntry: String(body.marketRegime || old.marketRegimeAtEntry || riskPlan?.state || 'UNKNOWN'),
+          addedAt,
+          updatedAt: Date.now(),
+          // 수동매매 관리 상태. 전량 매도 후 포지션이 삭제되면 다음 신규 등록 때 초기화됩니다.
+          peakPrice: Math.max(entry, Number(old.peakPrice) || entry),
+          tp1AlertedAt: Number(old.tp1AlertedAt) || null,
+          tp2AlertedAt: Number(old.tp2AlertedAt) || null,
+          lastTrailStop: Number(old.lastTrailStop) || null
         };
       } else {
         delete positions[symbol];
@@ -113,7 +133,7 @@ export default {
         const exit = positiveNumber(body.exit);
         const quantity = positiveNumber(body.quantity);
         if (!entry || !exit || !quantity) return json({ ok: false, error: '매수가, 매도가, 수량을 모두 올바르게 입력하세요.' }, 400);
-        const trade = makeClosedTrade({ symbol, entry, exit, quantity, boughtAt: Number(body.boughtAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'manual' });
+        const trade = makeClosedTrade({ symbol, entry, exit, quantity, boughtAt: Number(body.boughtAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'manual', feePct: strategyConfig(env).tradingFeePct });
         history.unshift(trade);
         await saveTradeHistory(env, history);
         return json({ ok: true, trade, ...(await buildLedger(env)) });
@@ -128,7 +148,7 @@ export default {
         if (!exit || !quantity) return json({ ok: false, error: '실제 매도가와 매도 수량을 입력하세요.' }, 400);
         const heldQty = positiveNumber(pos.quantity);
         if (heldQty && quantity > heldQty + 1e-12) return json({ ok: false, error: `매도 수량이 보유 수량(${heldQty})보다 큽니다.` }, 400);
-        const trade = makeClosedTrade({ symbol, entry: Number(pos.entry), exit, quantity, boughtAt: Number(pos.addedAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'position' });
+        const trade = makeClosedTrade({ symbol, entry: Number(pos.entry), exit, quantity, boughtAt: Number(pos.addedAt) || null, soldAt: Number(body.soldAt) || Date.now(), source: 'position', feePct: strategyConfig(env).tradingFeePct });
         history.unshift(trade);
         if (heldQty && quantity < heldQty - 1e-12) {
           positions[symbol] = { ...pos, quantity: heldQty - quantity, updatedAt: Date.now() };
@@ -223,7 +243,7 @@ export default {
       return json(result);
     }
 
-    // 백테스트용 Upbit 프록시. 브라우저의 Origin 제한(10초 1회)을 피하기 위해 1페이지씩 중계합니다.
+    // 백테스트용 Upbit 프록시. 5분봉과 BTC 일봉을 같은 Worker에서 중계합니다.
     if (req.method === 'POST' && u.pathname === '/candles') {
       const body = await readJson(req);
       const symbol = normalizeSymbol(body.symbol);
@@ -231,8 +251,11 @@ export default {
       const count = clampInt(Number(body.count) || 200, 1, 200);
       const to = body.to == null ? null : Number(body.to);
       if (to != null && !Number.isFinite(to)) return json({ ok: false, error: '잘못된 to 값입니다.' }, 400);
-      const candles = await fetchCandlesPage(symbol, 5, count, to);
-      return json({ ok: true, symbol, candles });
+      const frame = String(body.frame || '5m').toLowerCase();
+      const candles = frame === 'day'
+        ? await fetchDayCandlesPage(symbol, count, to)
+        : await fetchCandlesPage(symbol, 5, count, to);
+      return json({ ok: true, symbol, frame, candles });
     }
 
       return json({ ok: false, error: 'not found' }, 404);
@@ -325,6 +348,36 @@ async function fetchCandlesPage(symbol, unit = 5, count = 200, toMs = null) {
 async function recentClosed5m(symbol, asOf, limit = 180) {
   const raw = await fetchCandlesPage(symbol, 5, Math.min(200, limit + 1), null);
   const cutoff = Math.floor(asOf / FIVE_MIN) * FIVE_MIN;
+  return raw.filter(x => x[0] < cutoff).slice(-limit);
+}
+
+async function fetchDayCandlesPage(symbol, count = 200, toMs = null) {
+  const q = new URLSearchParams({ market: marketOf(symbol), count: String(Math.min(200, Math.max(1, count))) });
+  if (toMs != null) q.set('to', new Date(toMs).toISOString());
+  const r = await fetch(`${UPBIT_DAY_BASE}?${q.toString()}`, { headers: { accept: 'application/json' } });
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`Upbit day ${r.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+  }
+  const data = await r.json();
+  if (!Array.isArray(data)) throw new Error('Upbit day candle 응답 형식이 올바르지 않습니다.');
+  return data.reverse().map(c => [
+    candleStartMs(c),
+    Number(c.opening_price),
+    Number(c.high_price),
+    Number(c.low_price),
+    Number(c.trade_price),
+    Number(c.candle_acc_trade_volume)
+  ]).filter(x => Number.isFinite(x[0]));
+}
+
+async function recentClosedDays(symbol, asOf, limit = 200) {
+  const raw = await fetchDayCandlesPage(symbol, Math.min(200, limit + 1), null);
+  // Upbit 일봉은 00:00 KST에 새 봉이 시작합니다. UTC 자정이 아니라 KST 자정을 기준으로
+  // 현재 진행 중인 일봉을 제외해야 Regime이 미래/미완료 데이터를 보지 않습니다.
+  const KST = 9 * 60 * 60 * 1000;
+  const kd = new Date(Number(asOf) + KST);
+  const cutoff = Date.UTC(kd.getUTCFullYear(), kd.getUTCMonth(), kd.getUTCDate()) - KST;
   return raw.filter(x => x[0] < cutoff).slice(-limit);
 }
 
@@ -516,6 +569,111 @@ function analyzePatterns(k5, asOf) {
   };
 }
 
+function analyzeMarketRegime(daily) {
+  const d = (daily || []).slice(-200);
+  if (d.length < 60) return { state:'RANGE', score:0, confidence:20, reasons:['장기 일봉 데이터 부족'], dataPoints:d.length, ret30:null, ret90:null, drawdown90:null, rsiDaily:null };
+  const p = closes(d), price = p.at(-1);
+  const e20 = EMA(p,20), e50 = EMA(p,50), e200 = d.length >= 180 ? EMA(p, Math.min(200,p.length)) : null;
+  const rsi = RSI(p,14);
+  const ret30 = p.length > 30 ? pct(price,p.at(-31)) : null;
+  const ret90 = p.length > 90 ? pct(price,p.at(-91)) : null;
+  const high90 = Math.max(...p.slice(-Math.min(90,p.length)));
+  const drawdown90 = high90 ? (price/high90-1)*100 : 0;
+  const atrDailyPct = price ? ATR(d,14)/price*100 : 0;
+  const e20Prev = p.length > 10 ? EMA(p.slice(0,-10),20) : e20;
+  const e50Prev = p.length > 10 ? EMA(p.slice(0,-10),50) : e50;
+  let score=0; const reasons=[];
+
+  if (e200) {
+    if (price > e200) { score += 18; reasons.push('BTC 일봉 가격 > 200EMA'); }
+    else { score -= 18; reasons.push('BTC 일봉 가격 < 200EMA'); }
+    if (e50 > e200) { score += 14; reasons.push('50EMA > 200EMA'); }
+    else { score -= 14; reasons.push('50EMA < 200EMA'); }
+  }
+  if (price > e50) { score += 10; reasons.push('가격 > 50EMA'); } else { score -= 10; reasons.push('가격 < 50EMA'); }
+  if (e20 > e50) { score += 8; reasons.push('20EMA > 50EMA'); } else { score -= 8; reasons.push('20EMA < 50EMA'); }
+  if (e20 > e20Prev) score += 5; else score -= 5;
+  if (e50 > e50Prev) score += 4; else score -= 4;
+
+  if (ret30 != null) {
+    if (ret30 >= 12) { score += 10; reasons.push(`30일 +${rnd(ret30,1)}%`); }
+    else if (ret30 >= 4) score += 5;
+    else if (ret30 <= -12) { score -= 10; reasons.push(`30일 ${rnd(ret30,1)}%`); }
+    else if (ret30 <= -4) score -= 5;
+  }
+  if (ret90 != null) {
+    if (ret90 >= 25) { score += 10; reasons.push(`90일 +${rnd(ret90,1)}%`); }
+    else if (ret90 >= 8) score += 5;
+    else if (ret90 <= -25) { score -= 10; reasons.push(`90일 ${rnd(ret90,1)}%`); }
+    else if (ret90 <= -8) score -= 5;
+  }
+  if (drawdown90 >= -8) score += 6;
+  else if (drawdown90 <= -25) { score -= 12; reasons.push(`90일 고점 대비 ${rnd(drawdown90,1)}%`); }
+  else if (drawdown90 <= -15) { score -= 7; reasons.push(`90일 고점 대비 ${rnd(drawdown90,1)}%`); }
+  if (rsi >= 55 && rsi <= 72) score += 5;
+  else if (rsi < 42) { score -= 6; reasons.push(`일봉 RSI ${rnd(rsi,1)}`); }
+  else if (rsi > 80) score -= 3;
+
+  score = clamp(score,-100,100);
+  // EMA가 단순히 위에 있다는 이유만으로 횡보장을 강한 상승장으로 오인하지 않도록
+  // 실제 30/90일 방향성과 drawdown을 Regime 확정 조건에 함께 사용합니다.
+  const quiet30 = ret30 != null && Math.abs(ret30) < 2;
+  const quiet90 = ret90 != null && Math.abs(ret90) < 5;
+  if (quiet30 && quiet90) score = clamp(score,-15,15);
+  const bullMomentum = (ret30 >= 2.5 || ret90 >= 6) && price > e50 && (!e200 || price > e200);
+  const strongBullMomentum = (ret30 >= 8 || ret90 >= 20) && e20 > e50 && (!e200 || e50 > e200);
+  const bearMomentum = (ret30 <= -2.5 || ret90 <= -6 || drawdown90 <= -15) && price < e50;
+  const crashMomentum = (ret30 <= -12 || ret90 <= -25 || drawdown90 <= -25) && price < e50 && (!e200 || price < e200);
+  let state = 'RANGE';
+  if (score >= 50 && strongBullMomentum) state='STRONG_BULL';
+  else if (score >= 18 && bullMomentum) state='BULL';
+  else if (score <= -50 && crashMomentum) state='CRASH';
+  else if (score <= -18 && bearMomentum) state='BEAR';
+  const confidence = clamp(Math.abs(score)*0.75 + Math.min(25,d.length/8),20,100);
+  return {
+    state, score:rnd(score), confidence:rnd(confidence), dataPoints:d.length,
+    price:rnd(price,8), ema20:rnd(e20,8), ema50:rnd(e50,8), ema200:e200?rnd(e200,8):null,
+    ret30:ret30==null?null:rnd(ret30,2), ret90:ret90==null?null:rnd(ret90,2), drawdown90:rnd(drawdown90,2),
+    rsiDaily:rnd(rsi,1), atrDailyPct:rnd(atrDailyPct,2), reasons:reasons.slice(0,7)
+  };
+}
+
+function tradePlanFor(regimeState, atrPct, cfg) {
+  const a = clamp(Number(atrPct)||0.25,0.18,2.5);
+  const state = regimeState || 'RANGE';
+  let slPct,tp1Pct,tp2Pct,trailPct,partialPct,horizonHours;
+  if (state === 'STRONG_BULL') {
+    slPct=clamp(Math.max(cfg.stopLossPct*1.45,a*2.2),1.05,3.2);
+    tp1Pct=clamp(Math.max(cfg.tp1Pct*1.65,a*3.4),1.8,5.2);
+    tp2Pct=clamp(Math.max(cfg.tp2Pct*1.9,a*6.5),3.6,10);
+    trailPct=clamp(Math.max(.95,a*2.1),.9,3.0); partialPct=.30; horizonHours=72;
+  } else if (state === 'BULL') {
+    slPct=clamp(Math.max(cfg.stopLossPct*1.25,a*1.9),.9,2.8);
+    tp1Pct=clamp(Math.max(cfg.tp1Pct*1.35,a*2.8),1.5,4.2);
+    tp2Pct=clamp(Math.max(cfg.tp2Pct*1.5,a*5.0),2.8,8.0);
+    trailPct=clamp(Math.max(.75,a*1.7),.7,2.5); partialPct=.40; horizonHours=48;
+  } else if (state === 'BEAR' || state === 'CRASH') {
+    slPct=clamp(Math.max(.70,a*1.25),.7,1.8);
+    tp1Pct=clamp(Math.max(1.0,a*1.8),1.0,2.8);
+    tp2Pct=clamp(Math.max(1.8,a*3.0),1.8,4.5);
+    trailPct=clamp(Math.max(.45,a*1.0),.45,1.5); partialPct=.60; horizonHours=12;
+  } else {
+    slPct=clamp(Math.max(cfg.stopLossPct,a*1.5),.8,2.2);
+    tp1Pct=clamp(Math.max(cfg.tp1Pct,a*2.2),1.2,3.2);
+    tp2Pct=clamp(Math.max(cfg.tp2Pct,a*3.8),2.2,5.5);
+    trailPct=clamp(Math.max(.60,a*1.35),.6,1.9); partialPct=.50; horizonHours=24;
+  }
+  return { state, slPct:rnd(slPct,2), tp1Pct:rnd(tp1Pct,2), tp2Pct:rnd(tp2Pct,2), trailPct:rnd(trailPct,2), partialPct:rnd(partialPct,2), horizonHours };
+}
+
+function regimeBuyPolicy(state,cfg) {
+  if (!cfg.regimeEngine) return {allowed:true,minScore:cfg.minScore,minPattern:cfg.patternBuyMinScore,require15Up:false,label:'REGIME_OFF'};
+  if (state==='STRONG_BULL') return {allowed:true,minScore:cfg.minScore,minPattern:cfg.patternBuyMinScore,require15Up:false,label:'강한 상승장'};
+  if (state==='BULL') return {allowed:true,minScore:cfg.minScore,minPattern:Math.max(cfg.patternBuyMinScore,2),require15Up:false,label:'상승장'};
+  if (state==='RANGE') return {allowed:true,minScore:Math.min(95,cfg.minScore+7),minPattern:Math.max(4,cfg.patternBuyMinScore+1),require15Up:true,label:'횡보장·진입 강화'};
+  return {allowed:false,minScore:100,minPattern:99,require15Up:true,label:state==='CRASH'?'급락장·신규 BUY 차단':'하락장·신규 BUY 차단'};
+}
+
 function strategyConfig(env) {
   return {
     minScore: numEnv(env.MIN_SCORE, 75),
@@ -529,11 +687,13 @@ function strategyConfig(env) {
     contextSellThreshold: numEnv(env.CONTEXT_SELL_THRESHOLD, -12),
     patternConfirmation: String(env.PATTERN_CONFIRMATION ?? 'true').toLowerCase() !== 'false',
     patternBuyMinScore: numEnv(env.PATTERN_BUY_MIN_SCORE, 2),
-    patternSellScore: numEnv(env.PATTERN_SELL_SCORE, -4)
+    patternSellScore: numEnv(env.PATTERN_SELL_SCORE, -4),
+    regimeEngine: String(env.REGIME_ENGINE ?? 'true').toLowerCase() !== 'false',
+    tradingFeePct: numEnv(env.TRADING_FEE_PERCENT, 0.05)
   };
 }
 
-function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
+function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null, marketRegime = null) {
   if (k5.length < 60 || b5.length < 60) throw new Error('5분봉 데이터가 부족합니다.');
   const expectedStart = Math.floor(asOf / FIVE_MIN) * FIVE_MIN - FIVE_MIN;
   const altLast = k5.at(-1)?.[0];
@@ -572,20 +732,26 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
   score = clamp(score, 0, 100);
 
   const crash = bret <= -0.9 || br < 40 || bp.at(-1) < be20 * 0.995;
-  const regime = br >= 48 && br <= 68 && bp.at(-1) > be20 ? 'RISK_ON' : 'RISK_OFF';
+  const shortRegime = br >= 48 && br <= 68 && bp.at(-1) > be20 ? 'RISK_ON' : 'RISK_OFF';
+  const mr = marketRegime || { state:'RANGE', score:0, confidence:0, reasons:[] };
+  const policy = regimeBuyPolicy(mr.state,cfg);
   const techScore = score;
   const patternScore = Number(pattern.score) || 0;
   const contextScore = clamp(Number(external?.total) || 0, -20, 20);
-  const adjustedScore = clamp(techScore + patternScore + contextScore, 0, 100);
+  const regimeContribution = clamp((Number(mr.score)||0) / 10, -8, 8);
+  const adjustedScore = clamp(techScore + patternScore + contextScore + regimeContribution, 0, 100);
   const contextBlocked = contextScore <= cfg.contextBlockThreshold || !!external?.severeRisk;
-  const patternGate = !cfg.patternConfirmation || (pattern.bullishConfirmed && patternScore >= cfg.patternBuyMinScore && pattern.trend15 !== 'DOWN' && !pattern.bearishConfirmed);
-  // 외부 호재나 단순 패턴 모양만으로 BUY를 만들지 않습니다. 기존 기술조건 + 패턴 확정 + 완료봉/거래량 확인을 함께 요구합니다.
-  const hardTech = techScore >= cfg.minScore && regime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
-  const hard = hardTech && patternGate && !contextBlocked;
+  const patternGate = !cfg.patternConfirmation || (pattern.bullishConfirmed && patternScore >= policy.minPattern && pattern.trend15 !== 'DOWN' && !pattern.bearishConfirmed);
+  const regimeGate = policy.allowed && (!policy.require15Up || pattern.trend15 === 'UP');
+  // v8.3: 하락/급락장에서는 반등 패턴이 보여도 신규 BUY Telegram을 차단합니다.
+  const hardTech = techScore >= policy.minScore && shortRegime === 'RISK_ON' && r >= 52 && r <= 72 && relR >= 5 && e9 > e20 && vr >= 1.15 && relRet > 0 && !crash;
+  const hard = hardTech && patternGate && regimeGate && !contextBlocked;
   const signal = hard ? 'BUY' : (adjustedScore >= Math.max(60, cfg.minScore - 15) && !crash ? 'WATCH' : 'IDLE');
   const contextDataPenalty = clamp(Number(external?.confidencePenalty)||0, 0, 15);
-  const confidence = clamp(techScore * 0.64 + patternScore * 2.7 + contextScore * 1.05 + (regime === 'RISK_ON' ? 10 : -8) + (r15 > br15 ? 5 : 0) + (pattern.trend15 === 'UP' ? 4 : pattern.trend15 === 'DOWN' ? -6 : 0) + (breakout ? 2 : 0) - (atrPct < 0.25 ? 8 : 0) - (r > 76 ? 12 : 0) - contextDataPenalty, 0, 100);
-  const risk = crash || regime === 'RISK_OFF' || r > 76 || contextScore <= -8 || external?.severeRisk || pattern.bearishConfirmed || patternScore <= cfg.patternSellScore ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
+  const regimeConfidenceAdj = mr.state==='STRONG_BULL'?10:mr.state==='BULL'?6:mr.state==='RANGE'?0:mr.state==='BEAR'?-10:-18;
+  const confidence = clamp(techScore * 0.60 + patternScore * 2.6 + contextScore * 1.0 + regimeContribution * 2 + regimeConfidenceAdj + (shortRegime === 'RISK_ON' ? 6 : -5) + (r15 > br15 ? 4 : 0) + (pattern.trend15 === 'UP' ? 4 : pattern.trend15 === 'DOWN' ? -6 : 0) - contextDataPenalty, 0, 100);
+  const risk = crash || mr.state==='CRASH' || mr.state==='BEAR' || r > 76 || contextScore <= -8 || external?.severeRisk || pattern.bearishConfirmed || patternScore <= cfg.patternSellScore ? 'HIGH' : confidence >= 82 ? 'LOW' : 'MEDIUM';
+  const tradePlan = tradePlanFor(mr.state, atrPct, cfg);
 
   return {
     symbol,
@@ -607,6 +773,12 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
     context: external || null,
     contextBlocked,
     contextDataPenalty: rnd(contextDataPenalty,1),
+    regimeContribution:rnd(regimeContribution,1),
+    marketRegime: mr.state,
+    marketRegimeScore: rnd(Number(mr.score)||0),
+    marketRegimeConfidence: rnd(Number(mr.confidence)||0),
+    marketRegimeReasons: mr.reasons || [],
+    regimePolicy: policy,
     confidence: rnd(confidence),
     risk,
     signal,
@@ -626,11 +798,12 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
     volRatio: rnd(vr),
     breakout,
     atrPct: rnd(atrPct, 3),
-    regime,
+    regime: shortRegime,
     btcCrash: crash,
-    tp1: price * (1 + cfg.tp1Pct / 100),
-    tp2: price * (1 + cfg.tp2Pct / 100),
-    sl: price * (1 - cfg.stopLossPct / 100),
+    tradePlan,
+    tp1: price * (1 + tradePlan.tp1Pct / 100),
+    tp2: price * (1 + tradePlan.tp2Pct / 100),
+    sl: price * (1 - tradePlan.slPct / 100),
     reasons: reasons.slice(0, 6)
   };
 }
@@ -638,17 +811,93 @@ function evaluateSignal(symbol, k5, b5, asOf, cfg, external = null) {
 function sellCheck(s, pos, cfg) {
   const entry = Number(pos?.entry) || 0;
   const gain = entry ? ((s.price / entry) - 1) * 100 : 0;
+  const plan = pos?.riskPlan || s.tradePlan || tradePlanFor(s.marketRegime, s.atrPct, cfg);
+  const state = s.marketRegime || 'RANGE';
+  const entryState = String(pos?.marketRegimeAtEntry || plan?.state || 'UNKNOWN');
   const reasons = [];
-  if (entry && s.price <= entry * (1 - cfg.stopLossPct / 100)) reasons.push(`손절선 -${cfg.stopLossPct}% 도달`);
-  if (s.btcCrash) reasons.push('BTC 급락/약세');
-  if (s.regime === 'RISK_OFF') reasons.push('BTC 시장국면 Risk-Off');
-  if (s.ema9 < s.ema20 && s.relRet5 < 0) reasons.push('단기 추세·상대모멘텀 동시 약화');
-  if (s.score < 48 && s.ema9 < s.ema20) reasons.push('종합점수 하락 + EMA 약세');
-  if (entry && gain >= 1 && s.score < 55 && s.ema9 < s.ema20) reasons.push('수익 보호: 상승 후 추세 이탈');
-  if (s.patternBearish && Number(s.patternScore) <= cfg.patternSellScore) reasons.push(`하락 패턴 확인: ${s.patternLabel} (${s.patternScore})`);
-  if (s.context?.severeRisk) reasons.push('외부 이벤트 고위험 경보');
-  else if (Number(s.contextScore) <= cfg.contextSellThreshold && (s.regime === 'RISK_OFF' || s.score < 60)) reasons.push(`외부 컨텍스트 악화 ${s.contextScore}점`);
-  return { sell: reasons.length > 0, gain: rnd(gain), reasons };
+  let severity = 'NORMAL';
+
+  // 수동 포지션은 5분 완료봉 종가 기준으로 고점을 추적합니다.
+  // intrabar 고가를 쓰지 않아 봉 안의 고가/저가 순서를 알 수 없는 문제를 피합니다.
+  const priorPeak = Math.max(entry, Number(pos?.peakPrice) || entry);
+  const peakPrice = Math.max(priorPeak, Number(s.price) || 0);
+  const tp1Price = entry ? entry * (1 + Number(plan.tp1Pct || cfg.tp1Pct) / 100) : null;
+  const tp2Price = entry ? entry * (1 + Number(plan.tp2Pct || cfg.tp2Pct) / 100) : null;
+  const tp1Reached = !!pos?.tp1AlertedAt || (!!tp1Price && peakPrice >= tp1Price);
+  const tp2Reached = !!pos?.tp2AlertedAt || (!!tp2Price && peakPrice >= tp2Price);
+  const trailStop = tp1Reached && peakPrice
+    ? Math.max(entry * (1 + (cfg.tradingFeePct * 2 + 0.03) / 100), peakPrice * (1 - Number(plan.trailPct || 0.8) / 100))
+    : null;
+  const ageHours = Number(pos?.addedAt) ? Math.max(0, (Date.now() - Number(pos.addedAt)) / 3600000) : 0;
+
+  const hardStop = entry && s.price <= entry * (1 - Number(plan.slPct || cfg.stopLossPct) / 100);
+  if (hardStop) { reasons.push(`변동성 손절선 -${plan.slPct}% 도달`); severity='EMERGENCY'; }
+  if (s.btcCrash) { reasons.push('BTC 5분 급락/약세'); severity='EMERGENCY'; }
+  if (state === 'CRASH') { reasons.push(`대세 국면 CRASH (${s.marketRegimeScore})`); severity='EMERGENCY'; }
+  if (s.context?.severeRisk) { reasons.push('외부 이벤트 고위험 경보'); severity='EMERGENCY'; }
+
+  // TP1 이후 Runner는 고점 대비 동적 Trail을 실제 SELL 검토에 사용합니다.
+  if (!reasons.length && tp1Reached && trailStop && s.price <= trailStop) {
+    reasons.push(`TP1 이후 Runner Trail 이탈 · 고점 ₩${fmt(peakPrice)} → 기준 ₩${fmt(trailStop)}`);
+    severity='PROTECT';
+  }
+
+  const weakTrend = s.ema9 < s.ema20 && s.relRet5 < 0;
+  const weakScore = s.score < 48 && s.ema9 < s.ema20;
+  const bearPattern = s.patternBearish && Number(s.patternScore) <= cfg.patternSellScore;
+  const down15 = s.patternTrend15 === 'DOWN';
+  const shortRiskOff = s.regime === 'RISK_OFF';
+  const reachedTp1 = tp1Reached || (entry && gain >= Number(plan.tp1Pct||cfg.tp1Pct));
+  const weaknessCount = [weakTrend,weakScore,bearPattern,down15,shortRiskOff].filter(Boolean).length;
+
+  if (!reasons.length) {
+    if (state === 'STRONG_BULL') {
+      // 강한 상승장에서는 작은 Risk-Off/눌림만으로 팔지 않습니다.
+      if (bearPattern && down15 && weakTrend) reasons.push(`강한 상승장 추세 훼손: ${s.patternLabel}`);
+      else if (reachedTp1 && weaknessCount >= 2) reasons.push(`수익 보호: TP1 이후 약화 ${weaknessCount}개 확인`);
+    } else if (state === 'BULL') {
+      if ((bearPattern && (down15 || weakTrend)) || (reachedTp1 && weaknessCount >= 2)) reasons.push('상승장 추세 약화 2중 확인');
+      else if (weaknessCount >= 3) reasons.push('상승장 단기 약화 3중 확인');
+    } else if (state === 'RANGE') {
+      if (bearPattern) reasons.push(`하락 패턴 확인: ${s.patternLabel} (${s.patternScore})`);
+      if (shortRiskOff && weakTrend) reasons.push('횡보장 BTC Risk-Off + 단기 추세 약화');
+      if (weakScore) reasons.push('횡보장 Score/EMA 동시 약화');
+      if (reachedTp1 && weaknessCount >= 1) reasons.push('횡보장 수익 보호');
+    } else { // BEAR
+      if (shortRiskOff || weakTrend || bearPattern || down15) reasons.push('하락장 보유 위험 확대');
+      if (Number(s.contextScore) <= cfg.contextSellThreshold) reasons.push(`외부 컨텍스트 악화 ${s.contextScore}점`);
+    }
+  }
+
+  // 진입 당시 상승장이 현재 하락장으로 전환됐으면 단기 신호가 잠시 버텨도 수동 재검토합니다.
+  if (!reasons.length && ['STRONG_BULL','BULL'].includes(entryState) && ['BEAR','CRASH'].includes(state)) {
+    reasons.push(`진입 국면 ${entryState} → 현재 ${state} 전환`);
+    severity = state === 'CRASH' ? 'EMERGENCY' : 'STRONG';
+  }
+
+  // 최대 관찰시간은 강제 매도가 아니라 약화가 동반될 때만 SELL 검토 사유로 사용합니다.
+  if (!reasons.length && ageHours >= Number(plan.horizonHours || 24)) {
+    if (state === 'RANGE' && (gain <= 0 || weaknessCount >= 1)) reasons.push(`관찰 ${Math.round(ageHours)}h 경과 + 횡보/약화`);
+    else if (state === 'BEAR') reasons.push(`관찰 ${Math.round(ageHours)}h 경과 + 하락장`);
+    else if (['BULL','STRONG_BULL'].includes(state) && weaknessCount >= 2) reasons.push(`관찰 ${Math.round(ageHours)}h 경과 + 상승 탄력 약화`);
+  }
+
+  if (reasons.length && severity==='NORMAL') severity = reachedTp1 ? 'PROTECT' : (weaknessCount>=3 || state==='BEAR' ? 'STRONG' : 'NORMAL');
+
+  // TP1/TP2는 전량 SELL 신호가 아니라 수동 부분익절/Runner 관리 알림입니다.
+  // 같은 포지션에서 각 단계는 한 번만 알리도록 Cron이 KV 상태를 기록합니다.
+  let milestone = null;
+  if (!reasons.length) {
+    if (tp2Reached && !pos?.tp2AlertedAt) milestone = 'TP2';
+    else if (tp1Reached && !pos?.tp1AlertedAt) milestone = 'TP1';
+  }
+
+  return {
+    sell: reasons.length > 0,
+    gain: rnd(gain), reasons, severity, tradePlan:plan,
+    peakPrice:rnd(peakPrice,8), trailStop:trailStop?rnd(trailStop,8):null,
+    tp1Reached, tp2Reached, milestone, ageHours:rnd(ageHours,1), entryState
+  };
 }
 
 async function getPositions(env) {
@@ -664,6 +913,28 @@ async function getPositions(env) {
     }
     return normalized;
   } catch { return {}; }
+}
+
+async function persistPositionLifecycle(env, updates) {
+  if (!env.SCALPER_KV || !updates || !Object.keys(updates).length) return null;
+  const latest = await getPositions(env);
+  let changed = false;
+  for (const [symbol, patch] of Object.entries(updates)) {
+    const cur = latest[symbol];
+    if (!cur) continue;
+    // 사용자가 스캔 도중 포지션을 전량 매도/재등록한 경우 오래된 상태를 덮어쓰지 않습니다.
+    if (patch.addedAt && Number(cur.addedAt) && Number(patch.addedAt) !== Number(cur.addedAt)) continue;
+    const next = { ...cur };
+    if (Number.isFinite(Number(patch.peakPrice)) && Number(patch.peakPrice) > Number(next.peakPrice || next.entry || 0)) next.peakPrice = Number(patch.peakPrice);
+    if (patch.tp1AlertedAt && !next.tp1AlertedAt) next.tp1AlertedAt = Number(patch.tp1AlertedAt);
+    if (patch.tp2AlertedAt && !next.tp2AlertedAt) next.tp2AlertedAt = Number(patch.tp2AlertedAt);
+    if (Number.isFinite(Number(patch.lastTrailStop))) next.lastTrailStop = Number(patch.lastTrailStop);
+    next.updatedAt = Date.now();
+    latest[symbol] = next;
+    changed = true;
+  }
+  if (changed) await env.SCALPER_KV.put(POS_KEY, JSON.stringify(latest));
+  return changed ? latest : null;
 }
 
 function positiveNumber(value) {
@@ -685,11 +956,14 @@ async function saveTradeHistory(env, history) {
   await env.SCALPER_KV.put(TRADE_HISTORY_KEY, JSON.stringify((history || []).slice(0, MAX_TRADE_HISTORY)));
 }
 
-function makeClosedTrade({ symbol, entry, exit, quantity, boughtAt = null, soldAt = Date.now(), source = 'manual' }) {
+function makeClosedTrade({ symbol, entry, exit, quantity, boughtAt = null, soldAt = Date.now(), source = 'manual', feePct = 0.05 }) {
   const buyAmount = entry * quantity;
   const sellAmount = exit * quantity;
-  const pnl = sellAmount - buyAmount;
-  const pnlPct = entry ? (exit / entry - 1) * 100 : 0;
+  const buyFee = buyAmount * feePct / 100;
+  const sellFee = sellAmount * feePct / 100;
+  const grossPnl = sellAmount - buyAmount;
+  const pnl = sellAmount - sellFee - buyAmount - buyFee;
+  const pnlPct = (buyAmount + buyFee) ? pnl / (buyAmount + buyFee) * 100 : 0;
   return {
     id: `${soldAt}-${symbol}-${Math.random().toString(36).slice(2, 9)}`,
     symbol,
@@ -698,6 +972,10 @@ function makeClosedTrade({ symbol, entry, exit, quantity, boughtAt = null, soldA
     quantity: rnd(quantity, 12),
     buyAmount: rnd(buyAmount, 4),
     sellAmount: rnd(sellAmount, 4),
+    buyFee: rnd(buyFee, 4),
+    sellFee: rnd(sellFee, 4),
+    feePct: rnd(feePct, 4),
+    grossPnl: rnd(grossPnl, 4),
     pnl: rnd(pnl, 4),
     pnlPct: rnd(pnlPct),
     boughtAt,
@@ -723,6 +1001,13 @@ function applyLivePositions(snapshot, positions, cfg) {
       s.gain = q.gain;
       s.sell = q.sell;
       s.sellReasons = q.reasons;
+      s.sellSeverity = q.severity;
+      s.activeTradePlan = q.tradePlan;
+      s.peakPrice = q.peakPrice;
+      s.trailStop = q.trailStop;
+      s.tp1Reached = q.tp1Reached;
+      s.tp2Reached = q.tp2Reached;
+      s.positionAgeHours = q.ageHours;
     } else {
       s.held = false;
       s.entry = null;
@@ -743,6 +1028,7 @@ function applyLivePositions(snapshot, positions, cfg) {
 }
 
 async function buildLedger(env) {
+  const feePct = strategyConfig(env).tradingFeePct;
   const [positions, history, raw] = await Promise.all([
     getPositions(env),
     getTradeHistory(env),
@@ -760,10 +1046,14 @@ async function buildLedger(env) {
     const entry = Number(pos.entry);
     const quantity = positiveNumber(pos.quantity);
     const current = positiveNumber(latestPrices[symbol]);
-    const cost = quantity ? entry * quantity : null;
-    const value = quantity && current ? current * quantity : null;
+    const grossCost = quantity ? entry * quantity : null;
+    const buyFee = grossCost != null ? grossCost * feePct / 100 : null;
+    const cost = grossCost != null ? grossCost + buyFee : null;
+    const grossValue = quantity && current ? current * quantity : null;
+    const estimatedSellFee = grossValue != null ? grossValue * feePct / 100 : null;
+    const value = grossValue != null ? grossValue - estimatedSellFee : null;
     const pnl = cost != null && value != null ? value - cost : null;
-    const pnlPct = current && entry ? (current / entry - 1) * 100 : null;
+    const pnlPct = cost && pnl != null ? pnl / cost * 100 : null;
     if (cost != null && value != null) {
       openCost += cost; openValue += value; unrealizedPnl += pnl; knownOpen++;
     } else if (!quantity) unknownQty++;
@@ -775,8 +1065,17 @@ async function buildLedger(env) {
       current: current ?? null,
       cost: cost == null ? null : rnd(cost, 4),
       value: value == null ? null : rnd(value, 4),
+      buyFee: buyFee == null ? null : rnd(buyFee,4),
+      estimatedSellFee: estimatedSellFee == null ? null : rnd(estimatedSellFee,4),
       pnl: pnl == null ? null : rnd(pnl, 4),
-      pnlPct: pnlPct == null ? null : rnd(pnlPct)
+      pnlPct: pnlPct == null ? null : rnd(pnlPct),
+      riskPlan: pos.riskPlan || null,
+      marketRegimeAtEntry: pos.marketRegimeAtEntry || null,
+      peakPrice: positiveNumber(pos.peakPrice) ?? entry,
+      lastTrailStop: positiveNumber(pos.lastTrailStop) ?? null,
+      tp1AlertedAt: Number(pos.tp1AlertedAt) || null,
+      tp2AlertedAt: Number(pos.tp2AlertedAt) || null,
+      positionAgeHours: Number(pos.addedAt) ? rnd(Math.max(0,(Date.now()-Number(pos.addedAt))/3600000),1) : null
     };
   });
 
@@ -805,7 +1104,7 @@ async function buildLedger(env) {
       wins,
       winRate: history.length ? rnd(wins / history.length * 100) : 0
     },
-    note: '장부 손익은 거래소 수수료를 제외한 단순 매수가/매도가 기준입니다.'
+    note: `장부 손익은 편도 수수료 ${feePct}%를 매수·매도 양쪽에 추정 반영합니다. 실제 체결 수수료와 차이가 날 수 있습니다.`
   };
 }
 
@@ -1325,7 +1624,8 @@ async function markNotified(env, key, candleStart, cooldownMs) {
 async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now() } = {}) {
   const cfg = strategyConfig(env);
   const startedAt = Date.now();
-  const b5 = await recentClosed5m('BTC', asOf, 180);
+  const [b5, bDaily] = await Promise.all([recentClosed5m('BTC', asOf, 180), recentClosedDays('BTC', asOf, 200)]);
+  const marketRegime = analyzeMarketRegime(bDaily);
   const expectedStart = Math.floor(asOf / FIVE_MIN) * FIVE_MIN - FIVE_MIN;
   const context = await getExternalContext(env, { force: false, asOf });
   if (b5.at(-1)?.[0] !== expectedStart) throw new Error('BTC 최신 완료 5분봉을 가져오지 못했습니다.');
@@ -1334,7 +1634,7 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
   for (const symbol of COINS) {
     try {
       const k5 = await recentClosed5m(symbol, asOf, 180);
-      results.push(evaluateSignal(symbol, k5, b5, asOf, cfg, contextForSymbol(context, symbol)));
+      results.push(evaluateSignal(symbol, k5, b5, asOf, cfg, contextForSymbol(context, symbol), marketRegime));
     } catch (e) {
       results.push({ symbol, market: marketOf(symbol), signal: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     }
@@ -1344,25 +1644,45 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
   const positions = env.SCALPER_KV ? await getPositions(env) : {};
   const held = Object.keys(positions);
   const sellSignals = [];
+  const profitSignals = [];
+  const lifecycleUpdates = {};
   for (const s of results) {
     if (!Number.isFinite(s.score)) { s.held = !!positions[s.symbol]; continue; }
     if (positions[s.symbol]) {
-      const q = sellCheck(s, positions[s.symbol], cfg);
+      const pos = positions[s.symbol];
+      const q = sellCheck(s, pos, cfg);
       s.held = true;
-      s.entry = positions[s.symbol].entry;
-      s.quantity = positions[s.symbol].quantity ?? null;
+      s.entry = pos.entry;
+      s.quantity = pos.quantity ?? null;
       s.gain = q.gain;
       s.sell = q.sell;
       s.sellReasons = q.reasons;
+      s.sellSeverity = q.severity;
+      s.activeTradePlan = q.tradePlan;
+      s.peakPrice = q.peakPrice;
+      s.trailStop = q.trailStop;
+      s.tp1Reached = q.tp1Reached;
+      s.tp2Reached = q.tp2Reached;
+      s.positionAgeHours = q.ageHours;
+      s.profitMilestone = q.milestone;
+
+      if (notify) {
+        const patch = { addedAt: Number(pos.addedAt) || null };
+        if (Number(q.peakPrice) > Number(pos.peakPrice || pos.entry || 0)) patch.peakPrice = q.peakPrice;
+        if (q.trailStop && Math.abs(Number(q.trailStop)-Number(pos.lastTrailStop||0)) > Math.max(1e-8, Number(q.trailStop)*1e-6)) patch.lastTrailStop = q.trailStop;
+        if (Object.keys(patch).length > 1) lifecycleUpdates[s.symbol] = { ...(lifecycleUpdates[s.symbol]||{}), ...patch };
+      }
       if (q.sell) sellSignals.push(s);
+      else if (q.milestone) profitSignals.push(s);
     } else {
       s.held = false;
       s.sell = false;
       s.sellReasons = [];
+      s.profitMilestone = null;
     }
   }
 
-  const sent = [], sold = [], skipped = [];
+  const sent = [], sold = [], profitReviewed = [], skipped = [];
   if (notify) {
     requireKV(env);
     requireTelegram(env);
@@ -1381,12 +1701,38 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
       sent.push(s.symbol);
     }
 
+    // TP1/TP2는 전량 SELL이 아니라 수동 부분익절/Runner 관리용 1회성 리뷰 알림입니다.
+    for (const s of profitSignals) {
+      const type = String(s.profitMilestone || '').toLowerCase();
+      const cooldownMs = 30 * 24 * 60 * 60 * 1000;
+      const positionKey = Number(positions[s.symbol]?.addedAt)||0;
+      const gate = await shouldNotify(env, `${type || 'profit'}-${positionKey}`, s.symbol, s.candleStart, cooldownMs);
+      if (!gate.yes) { skipped.push(`${s.symbol}:${type.toUpperCase()}:${gate.reason}`); continue; }
+      await sendTelegram(env, formatProfitReview(s));
+      await markNotified(env, gate.key, s.candleStart, cooldownMs);
+      const now = Date.now();
+      const patch = { ...(lifecycleUpdates[s.symbol]||{}), addedAt:Number(positions[s.symbol]?.addedAt)||null };
+      if (s.profitMilestone === 'TP2') { patch.tp1AlertedAt = Number(positions[s.symbol]?.tp1AlertedAt)||now; patch.tp2AlertedAt = now; }
+      else patch.tp1AlertedAt = now;
+      lifecycleUpdates[s.symbol] = patch;
+      profitReviewed.push(`${s.symbol}:${s.profitMilestone}`);
+    }
+
     for (const s of sellSignals) {
-      const gate = await shouldNotify(env, 'sell', s.symbol, s.candleStart, sellCooldownMs);
+      // 긴급 손절/CRASH는 5분 단위로 재확인할 수 있게 하고, 일반 SELL 검토는 기존 쿨다운을 유지합니다.
+      const thisCooldownMs = s.sellSeverity === 'EMERGENCY' ? FIVE_MIN : sellCooldownMs;
+      const gate = await shouldNotify(env, 'sell', s.symbol, s.candleStart, thisCooldownMs);
       if (!gate.yes) { skipped.push(`${s.symbol}:SELL:${gate.reason}`); continue; }
       await sendTelegram(env, formatSell(s));
-      await markNotified(env, gate.key, s.candleStart, sellCooldownMs);
+      await markNotified(env, gate.key, s.candleStart, thisCooldownMs);
       sold.push(s.symbol);
+    }
+
+    if (Object.keys(lifecycleUpdates).length) {
+      const merged = await persistPositionLifecycle(env, lifecycleUpdates);
+      if (merged) {
+        for (const [symbol,pos] of Object.entries(merged)) positions[symbol] = pos;
+      }
     }
   }
 
@@ -1405,12 +1751,15 @@ async function scanAll(env, { notify = false, source = 'manual', asOf = Date.now
     btcPrice: bp.at(-1) || null,
     btcRsi: rnd(RSI(bp)),
     btcRet5: rnd(pct(bp.at(-1), bp.at(-2))),
+    marketRegime,
     held,
     positions,
     sent,
     sold,
+    profitReviewed,
     skipped,
     sellSignals: sellSignals.map(x => x.symbol),
+    profitSignals: profitSignals.map(x => `${x.symbol}:${x.profitMilestone}`),
     top: results.filter(x => Number.isFinite(x.score)).sort((a, b) => b.confidence - a.confidence || b.score - a.score).slice(0, 5),
     results,
     strategy: cfg,
@@ -1427,11 +1776,28 @@ function kstTime(ms) {
 }
 
 function formatBuy(s, cfg) {
-  return `🟢 BUY SIGNAL ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\nTech Score: ${s.score}/100 (기준 ${cfg.minScore})\nPattern: ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} · ${s.patternLabel} · 15m ${s.patternTrend15}\n외부 Context: ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 합산 ${s.adjustedScore}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🎯 TP1 +${cfg.tp1Pct}%: ₩${fmt(s.tp1)}\n🎯 TP2 +${cfg.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 SL -${cfg.stopLossPct}%: ₩${fmt(s.sl)}\n\n근거: ${s.reasons.join(' · ')}\n패턴: ${(s.patternReasons||[]).join(' · ') || '확정 패턴 없음'}\n⚠️ 알림 전용이며 주문은 자동 실행하지 않습니다.`;
+  const plan=s.tradePlan||tradePlanFor(s.marketRegime,s.atrPct,cfg);
+  return `🟢 BUY REVIEW ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n가격: ₩${fmt(s.price)}\n대세 Regime: ${s.marketRegime} ${s.marketRegimeScore>=0?'+':''}${s.marketRegimeScore} · 단기 BTC ${s.regime}\nTech Score: ${s.score}/100 (기준 ${s.regimePolicy?.minScore??cfg.minScore})\nPattern: ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} · ${s.patternLabel} · 15m ${s.patternTrend15}\n외부 Context: ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · Regime 보정 ${s.regimeContribution>=0?'+':''}${s.regimeContribution} · 합산 ${s.adjustedScore}/100\n신뢰도: ${s.confidence}/100 · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · ALT RSI: ${s.rsi}\nRSI 상대강도: ${s.rsiRel >= 0 ? '+' : ''}${s.rsiRel}p\n5m 상대모멘텀: ${s.relRet5 >= 0 ? '+' : ''}${s.relRet5}%\n거래량: ${s.volRatio}x · 5m ATR: ${s.atrPct}%\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n📐 Regime 적응형 수동 매매 계획\n🎯 TP1 +${plan.tp1Pct}%: ₩${fmt(s.tp1)} · 1차 익절 참고 ${(plan.partialPct*100).toFixed(0)}%\n🎯 TP2 +${plan.tp2Pct}%: ₩${fmt(s.tp2)}\n🛑 변동성 SL -${plan.slPct}%: ₩${fmt(s.sl)}\n📎 Trail ${plan.trailPct}% · 최대 관찰 ${plan.horizonHours}h\n\n기술 근거: ${s.reasons.join(' · ')}\n패턴: ${(s.patternReasons||[]).join(' · ') || '확정 패턴 없음'}\n대세 근거: ${(s.marketRegimeReasons||[]).slice(0,4).join(' · ') || '—'}\n⚠️ 수동매매 검토 알림입니다. 실제 주문은 자동 실행하지 않습니다.`;
+}
+
+function formatProfitReview(s) {
+  const plan=s.activeTradePlan||s.tradePlan||{};
+  const type=s.profitMilestone||'TP1';
+  const isTp2=type==='TP2';
+  const partialPct=Math.round((Number(plan.partialPct)||0.5)*100);
+  const peak=s.peakPrice||s.price;
+  const trail=s.trailStop||null;
+  const headline=isTp2?'🟠 TP2 / RUNNER REVIEW':'🟡 TP1 PARTIAL REVIEW';
+  const action=isTp2
+    ? `TP2 도달 구간입니다. 남은 물량은 전량매도 신호가 아니라 Runner 유지 여부와 Trail 보호를 수동 검토하세요.`
+    : `시스템 계획상 보유수량의 약 ${partialPct}% 부분익절을 검토하고, 나머지는 Runner로 유지하는 구간입니다.`;
+  return `${headline} ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n현재 손익: ${s.gain>=0?'+':''}${s.gain}%\n대세 Regime: ${s.marketRegime} ${s.marketRegimeScore>=0?'+':''}${s.marketRegimeScore}\nPattern: ${s.patternScore>=0?'+':''}${s.patternScore} · ${s.patternLabel} · 15m ${s.patternTrend15}\n\n🎯 TP1 +${plan.tp1Pct??'—'}% · TP2 +${plan.tp2Pct??'—'}%\n🛑 SL -${plan.slPct??'—'}% · Trail ${plan.trailPct??'—'}%\n📈 완료봉 기준 추적 고점: ₩${fmt(peak)}${trail?`\n📎 현재 Runner Trail 기준: ₩${fmt(trail)}`:''}\n\n${action}\n장부에서 실제 부분매도를 했다면 매도가/수량을 기록하면 남은 수량은 계속 보유로 관리됩니다.\n⚠️ 주문은 자동 실행하지 않습니다. 실제 매매는 사용자가 직접 판단합니다.`;
 }
 
 function formatSell(s) {
-  return `🔴 SELL CHECK ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\nTech Score: ${s.score}/100 · Pattern ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} (${s.patternLabel}) · Context ${s.contextScore >= 0 ? '+' : ''}${s.contextScore} · 위험: ${s.risk}\nBTC RSI: ${s.btcRsi} · BTC 국면: ${s.regime}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
+  const plan=s.activeTradePlan||s.tradePlan||{};
+  const icon=s.sellSeverity==='EMERGENCY'?'🚨':'🔴';
+  return `${icon} SELL REVIEW ${VERSION}\n\n${s.symbol}/KRW\n완료봉: ${kstTime(s.candleStart)} KST\n현재가: ₩${fmt(s.price)}\n진입가(기록): ₩${fmt(s.entry)}\n${s.quantity ? `보유수량(기록): ${s.quantity} ${s.symbol}\n` : ''}현재 손익: ${s.gain >= 0 ? '+' : ''}${s.gain}%\n대세 Regime: ${s.marketRegime} ${s.marketRegimeScore>=0?'+':''}${s.marketRegimeScore} · 단기 BTC ${s.regime}\nTech ${s.score}/100 · Pattern ${s.patternScore >= 0 ? '+' : ''}${s.patternScore} (${s.patternLabel}) · Context ${s.contextScore >= 0 ? '+' : ''}${s.contextScore}\n위험: ${s.risk} · 경보등급: ${s.sellSeverity||'NORMAL'}\n동적 기준: SL -${plan.slPct??'—'}% · TP1 +${plan.tp1Pct??'—'}% · TP2 +${plan.tp2Pct??'—'}% · Trail ${plan.trailPct??'—'}%\n추적 고점: ₩${fmt(s.peakPrice)}${s.trailStop?` · Runner Trail ₩${fmt(s.trailStop)}`:''}\nEMA9/20/50: ${fmt(s.ema9)} / ${fmt(s.ema20)} / ${fmt(s.ema50)}\n\n🚨 매도 검토 사유\n${s.sellReasons.map(x => `• ${x}`).join('\n')}\n\n상승장에서는 작은 눌림/Risk-Off만으로 SELL을 내지 않고 복수 약화 신호를 요구합니다.\n⚠️ 실제 주문은 자동 실행하지 않습니다.`;
 }
 
 function fmt(x) {

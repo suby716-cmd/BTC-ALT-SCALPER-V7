@@ -1,8 +1,73 @@
-# BTC ALT SCALPER v8.2.0
+# BTC ALT REGIME TRADER v8.3.0
 
-Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 + EMA + 거래량 + 돌파 조건을 계산하고, Cloudflare Worker Cron이 24시간 자동 감시하여 Telegram으로 BUY/SELL **검토 알림**을 보내는 시스템입니다.
+Upbit KRW 시장을 대상으로 **BTC 완료 일봉 Market Regime + 15분 구조 + 5분 기술·패턴 + 외부 Context**를 결합하고, Cloudflare Worker Cron이 24시간 감시하여 Telegram으로 BUY/SELL **검토 알림**만 보내는 수동매매 보조 시스템입니다.
 
 > 이 프로젝트는 주문을 자동 실행하지 않습니다. Telegram 알림을 바탕으로 사용자가 직접 판단하는 수동매매 보조 도구입니다.
+
+
+## v8.3.0 Market Regime + Regime-Adaptive Exit
+
+v8.2의 90일 ALL 백테스트에서 Pattern ON이어도 거래 575회, 승률 28.7%, 복리 -57.65%, PF 0.54, MDD 60.63%가 나타난 문제를 단순히 패턴 추가로 해결하지 않고 **대세 상승·하락장에 따라 진입과 청산 규칙 자체를 바꾸는 구조**로 개선했습니다.
+
+### 1) BTC 완료 일봉 Market Regime
+
+BTC 완료 일봉의 20/50/200 EMA, 30·90일 수익률, 90일 고점 대비 낙폭, 일봉 RSI, 추세 기울기를 점수화해 다음 5단계로 분류합니다.
+Upbit 일봉은 **00:00 KST** 기준으로 완료 여부를 판단해 현재 진행 중인 일봉은 Regime 계산과 백테스트에서 제외합니다.
+
+- `STRONG_BULL` — 강한 상승장
+- `BULL` — 상승장
+- `RANGE` — 횡보/혼조
+- `BEAR` — 하락장
+- `CRASH` — 강한 하락/급락장
+
+고정적인 “4년마다 오른다” 규칙을 직접 매매 신호로 쓰지 않습니다. 반감기/장기 사이클 현상은 가격 자체에 이미 반영되므로, 실제 200EMA·30/90일 수익률·낙폭이 확인될 때만 상승장으로 판정합니다.
+
+### 2) Regime별 신규 BUY 정책
+
+- `STRONG_BULL/BULL`: 기존 Score + Pattern 확인을 통과하면 BUY 검토 가능
+- `RANGE`: Score 기준을 기본보다 +7 높이고 Pattern +4 이상, 15분 구조 UP 요구
+- `BEAR/CRASH`: 신규 BUY Telegram 차단. 반등 패턴을 “대세 상승 전환”으로 오인하지 않도록 함
+
+### 3) 고정 TP1/TP2/SL을 Regime + ATR 적응형으로 교체
+
+`1.2% / 2.2% / 0.8%`를 절대값으로 사용하지 않습니다. 각 코인의 5분 ATR과 현재 Regime을 사용해 SL, TP1, TP2, Trail, 1차 익절 비율, 최대 관찰시간을 계산합니다.
+
+예시 방향:
+
+- `STRONG_BULL`: 더 넓은 SL/TP, TP1 30%만 부분익절, 최대 72시간 Runner 허용
+- `BULL`: TP1 40% 부분익절, 최대 48시간
+- `RANGE`: TP1 50%, 최대 24시간
+- `BEAR`: 신규 BUY 차단이 기본이며 기존 보유는 더 민감하게 위험 축소
+
+### 4) 상승장 SELL 과민반응 완화
+
+기존에는 BTC 5분 `RISK_OFF`만으로도 SELL 검토 사유가 될 수 있었습니다. v8.3은 `STRONG_BULL/BULL`에서 작은 눌림 또는 단기 Risk-Off 하나만으로 SELL하지 않고 **하락 패턴 + 15분 DOWN + EMA/상대모멘텀 약화 등 복수 약화 조건**을 요구합니다. 반대로 `CRASH`, 동적 SL 도달, 외부 고위험 이벤트는 긴급 SELL 검토로 분류합니다.
+
+### 5) 거래 회전율/수수료 문제 + 수동 Runner 관리
+
+- 백테스트는 기존처럼 편도 수수료와 슬리피지를 반영합니다.
+- 장부도 v8.3부터 편도 `TRADING_FEE_PERCENT=0.05` 기본값을 매수·매도 양쪽에 추정 반영하여 순손익을 표시합니다.
+- 신규 보유 등록 시 당시 Regime과 동적 SL/TP/Trail 계획을 KV에 함께 저장합니다.
+- Cron은 보유 포지션의 **완료 5분봉 종가 기준 Peak**를 추적합니다. intrabar 고가를 쓰지 않아 한 봉 안에서 고가와 저가 중 무엇이 먼저 나왔는지 모르는 문제를 피합니다.
+- TP1 도달 시 `TP1 PARTIAL REVIEW`를 한 번 보내며, Regime별 부분익절 비율을 **참고값**으로 제시합니다. 실제 매도는 사용자가 직접 합니다.
+- TP2 도달 시 `TP2 / RUNNER REVIEW`를 한 번 보내고, 남은 물량은 Peak 대비 동적 Trail로 보호합니다.
+- 실제 부분매도를 장부에 기록하면 남은 수량은 동일 포지션으로 계속 관리됩니다.
+
+### 6) 수동매매 전용
+
+v8.3도 **주문 API를 호출하지 않습니다.** BUY/SELL은 Telegram 검토 알림이며, 실제 매수·매도는 사용자가 직접 판단·실행합니다. 자동매매 기능이나 Upbit 로그인/API 주문 권한은 포함하지 않습니다.
+
+### 7) 백테스트 비교
+
+대시보드에서 아래 조합을 같은 기간·같은 수수료 조건으로 비교할 수 있습니다.
+
+- `v8.3 Regime+Adaptive Exit / Regime ON`
+- `v8.2 ATR+SELL+Trail / Regime OFF`
+- `Pattern ON/OFF`
+
+목표는 거래 횟수를 무조건 늘리는 것이 아니라 **PF·기대값을 양수로 만들고 MDD·수수료 회전율을 낮추는 것**입니다.
+
+> v8.3 역시 수익을 보장하지 않습니다. 특히 전략 변경 후에는 30/60/90일 비교, 워크포워드, 비용 스트레스, 실제 수동 관찰을 함께 확인해야 합니다.
 
 ## v8.2.0 Pattern Confirmation Engine
 
@@ -48,7 +113,7 @@ Upbit KRW 5분봉을 기준으로 BTC 시장 국면 + 상대강도 + 모멘텀 +
 4. 잘못 입력한 보유정보는 `수정`, 과거 거래는 `지난 거래 직접 기록`으로 보완합니다.
 5. 데이터는 Cloudflare KV에 저장되어 집/업무 PC/휴대폰에서 같은 Worker URL과 PIN을 쓰면 공유됩니다.
 
-> 현재 장부 손익은 거래소 수수료를 제외한 단순 매입·매도 기준입니다.
+> 참고: 위 문장은 v8.1 당시 동작 설명입니다. **v8.3 장부는 매수·매도 양쪽의 추정 수수료를 반영합니다.**
 
 
 ## v8.1.1 웹 연결 상태 긴급 수정
@@ -151,7 +216,7 @@ FRED 의존을 제거하고 **미국 정부·공식 거래소의 공개 원천�
 - `docs/` — GitHub Pages 대시보드 + Upbit KRW 백테스트
 - `worker/` — Cloudflare Worker + Cron + Telegram + KV
 
-`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.2.0입니다.
+`wrangler.toml`의 Worker 이름은 기존 URL을 유지하기 쉽도록 `btc-alt-scalper-v7`을 그대로 사용합니다. 화면/엔진 버전은 v8.3.0입니다.
 - `DEPLOY.md` — 배포/점검 순서
 
 ## Cloudflare Secrets

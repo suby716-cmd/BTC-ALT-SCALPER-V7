@@ -13,15 +13,21 @@ SELL_COOLDOWN_MINUTES = "60"
 MAX_BUY_ALERTS = "2"
 CRON_DELAY_SECONDS = "12"
 
-# v8.2 외부 컨텍스트 + 패턴 확인 보호장치
+# v8.3 외부 컨텍스트 + 패턴 + 대세 Regime 보호장치
 # 외부 호재만으로 BUY를 만들지 않습니다. 기술적 hard gate는 항상 필수입니다.
 CONTEXT_BLOCK_THRESHOLD = "-8"
 CONTEXT_SELL_THRESHOLD = "-12"
 
-# v8.2 Pattern Confirmation: 패턴은 단독 매수 신호가 아니라 기존 기술조건의 확인 필터입니다.
+# Pattern Confirmation: 패턴은 단독 매수 신호가 아니라 기존 기술조건의 확인 필터입니다.
 PATTERN_CONFIRMATION = "true"
 PATTERN_BUY_MIN_SCORE = "2"
 PATTERN_SELL_SCORE = "-4"
+
+# v8.3 Market Regime Engine: BTC 완료 일봉으로 STRONG_BULL/BULL/RANGE/BEAR/CRASH를 판정합니다.
+REGIME_ENGINE = "true"
+
+# 수동 장부와 백테스트에 반영할 편도 거래 수수료 기본값(%)
+TRADING_FEE_PERCENT = "0.05"
 
 [triggers]
 crons = ["*/5 * * * *"]

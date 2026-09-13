@@ -1,6 +1,6 @@
-# BTC ALT SCALPER v8.0.1 배포 체크리스트
+# BTC ALT REGIME TRADER v8.3.0 배포 체크리스트
 
-이 문서는 기존 v7을 v8으로 교체할 때 필요한 작업만 순서대로 정리한 것입니다.
+이 문서는 기존 Worker/GitHub Pages를 v8.3.0 Regime-Adaptive Manual Trader로 교체할 때 필요한 작업을 순서대로 정리한 것입니다. 자동 주문은 포함하지 않습니다.
 
 ## 1. GitHub 저장소에 파일 업로드
 
@@ -65,6 +65,13 @@ BUY_COOLDOWN_MINUTES=20
 SELL_COOLDOWN_MINUTES=60
 MAX_BUY_ALERTS=2
 CRON_DELAY_SECONDS=12
+CONTEXT_BLOCK_THRESHOLD=-8
+CONTEXT_SELL_THRESHOLD=-12
+PATTERN_CONFIRMATION=true
+PATTERN_BUY_MIN_SCORE=2
+PATTERN_SELL_SCORE=-4
+REGIME_ENGINE=true
+TRADING_FEE_PERCENT=0.05
 ```
 
 `wrangler.toml`로 배포하면 `[vars]` 값이 적용됩니다. Dashboard 수동 배포를 사용한다면 같은 값을 일반 Variables로 넣어두는 편이 안전합니다.
@@ -100,7 +107,7 @@ https://YOUR-WORKER.workers.dev/health
 ```json
 {
   "ok": true,
-  "version": "v8.2.0",
+  "version": "v8.3.0",
   "kv": true,
   "telegramConfigured": true,
   "pinConfigured": true
@@ -108,6 +115,8 @@ https://YOUR-WORKER.workers.dev/health
 ```
 
 `kv:false`이면 자동 알림 중복 방지와 보유 관리가 안전하지 않으므로 먼저 KV를 연결하세요.
+
+v8.3.0에서는 `/health`의 `externalContext.manualOnly=true`, `adaptiveProfitReviews=true`, `autoTrading=false`도 확인할 수 있습니다. 이 값들은 **Telegram 수동매매 알림 전용**이고 주문 API가 없다는 의미입니다.
 
 ## 8. GitHub Pages에서 연결
 
@@ -125,6 +134,15 @@ GitHub Pages를 배포한 뒤 화면에서:
 `연결 점검`에서 필수 설정이 모두 정상이고, `Cron 상태`에서 최근 5~10분 내 실행 기록이 보이면 **PC를 꺼도 24시간 자동 감시가 동작하는 상태**입니다.
 
 ## 9. v8의 중요한 동작 차이
+
+### v8.3 수동매매 알림 종류
+
+- `BUY REVIEW`: 신규 진입 검토. 실제 주문 없음.
+- `TP1 PARTIAL REVIEW`: 동적 TP1 도달 시 1회. 부분익절 참고비율과 Runner 계획 표시.
+- `TP2 / RUNNER REVIEW`: 동적 TP2 도달 시 1회. 남은 물량의 Trail 관리 검토.
+- `SELL REVIEW`: 변동성 SL, Runner Trail 이탈, Regime 악화, 하락 패턴/복수 약화 등 매도 검토 사유.
+
+모든 알림은 검토용이며 **실제 매수·매도는 사용자가 직접 실행하고 장부에 기록합니다.**
 
 ### 웹페이지를 열어도 Telegram 신호가 추가 발송되지 않습니다
 
@@ -159,7 +177,7 @@ GitHub Pages를 배포한 뒤 화면에서:
 
 > 보유/매매 데이터는 Cloudflare KV에 저장되어 기기 간 공유됩니다. Worker URL/PIN은 각 브라우저 로컬 저장이므로 새 기기에서는 다시 입력해야 합니다. Cloudflare KV는 전 세계 엣지에 전파되는 저장소라 아주 짧은 동기화 지연이 생길 수 있습니다.
 
-장부 손익은 v8.1.4에서는 거래소 수수료 제외 기준입니다.
+장부 손익은 v8.1.4 당시에는 거래소 수수료 제외 기준이었고, v8.3.0부터는 `TRADING_FEE_PERCENT` 기준으로 매수·매도 수수료를 추정 반영합니다.
 
 ## v8.1.4 백테스트 확인
 
@@ -176,6 +194,29 @@ GitHub Pages를 배포한 뒤 화면에서:
 60~90일 ALL 백테스트는 Upbit 5분봉을 여러 페이지로 가져오므로 시간이 오래 걸릴 수 있습니다. 한 번 가져온 긴 기간 데이터는 같은 브라우저 세션에서 짧은 기간 테스트에 재사용됩니다.
 
 > 백테스트/최적화 값은 실시간 Worker 설정에 자동 적용되지 않습니다. 실전 전략값 변경은 별도 검증 후 `wrangler.toml`/Cloudflare Variables를 수정하여 재배포해야 합니다.
+
+## v8.3.0 Regime / 동적 Exit 확인
+
+배포 후 다음을 확인합니다.
+
+1. `/health`에서 `version: v8.3.0`, `strategyVersion: krw-5m-v8.3-regime-adaptive-manual`, `kv:true`, Telegram/PIN true 확인
+2. 대시보드 상단 `대세 Regime`이 `STRONG_BULL / BULL / RANGE / BEAR / CRASH` 중 하나로 표시되는지 확인
+3. 수동 `지금 조회(알림X)`에서 각 코인 행에 Regime, Pattern, 동적 Trade Plan이 표시되는지 확인
+4. 실제 보유 등록 시 당시 Regime과 동적 SL/TP 계획이 장부에 저장되는지 확인
+5. `BEAR/CRASH`에서는 신규 BUY Telegram이 차단되는지, `RANGE`에서는 강화된 진입조건이 적용되는지 확인
+6. `STRONG_BULL/BULL`에서는 단기 Risk-Off 하나만으로 SELL이 발생하지 않고 복수 약화 조건 또는 긴급 위험이 필요한지 확인
+7. 백테스트에서 같은 기간·같은 수수료로 `v8.2 비교 / Regime OFF`와 `v8.3 Regime+Adaptive Exit / Regime ON`을 비교
+
+### TP1/TP2/SL 해석
+
+`TP1_PERCENT=1.2`, `TP2_PERCENT=2.2`, `STOP_LOSS_PERCENT=0.8`은 v8.3에서 더 이상 모든 코인에 그대로 강제되는 고정 청산값이 아니라 **동적 계획의 기준값(anchor)** 입니다. 실제 계획은 코인의 5분 ATR과 BTC 일봉 Regime에 따라 넓어지거나 좁아집니다.
+
+- STRONG_BULL: 작은 눌림을 견디도록 SL/Trail과 목표폭을 넓히고 TP1은 전량매도가 아닌 일부익절 참고선
+- BULL: 부분익절 + Runner 유지
+- RANGE: 진입기준 강화, 이익보호를 빠르게
+- BEAR/CRASH: 신규 BUY 차단, 기존 보유 위험 축소
+
+Telegram의 BUY/SELL은 **검토 알림**입니다. 사용자가 직접 주문하며 Worker는 Upbit 주문 API를 호출하지 않습니다.
 
 ## 10. 문제가 있을 때
 
@@ -205,7 +246,7 @@ CRYPTOPANIC_AUTH_TOKEN=발급받은_토큰
 
 이 Secret은 GitHub에 넣지 않습니다. 토큰이 없으면 News 점수는 0으로 유지되고 나머지 기능은 정상 동작합니다.
 
-`/health`에서 v8.2.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
+`/health`에서 v8.3.0, `kv:true`, Telegram/PIN true를 확인한 뒤 대시보드에서 외부 Context를 새로고침합니다. 외부 데이터 제공자가 일시 실패해도 5분 가격 스캔은 계속 실행되도록 fail-open 설계되어 있습니다.
 
 ### Polymarket
 
@@ -236,7 +277,7 @@ Polymarket의 market ID(숫자)를 등록하고, 해당 시장에서 코인에 �
 
 ## v8.1.4 안정화 확인
 
-- `/health`에서 `version: v8.2.0`, `kv:true`, Telegram/PIN true 확인
+- `/health`에서 `version: v8.3.0`, `kv:true`, Telegram/PIN true 확인
 - 외부 Context 새로고침 후 9개 중 6개 이상이면 `부분 데이터`로 계산되어야 함
 - BLS가 429를 반환해도 이미 저장된 최근 정상 캐시가 있으면 계속 사용하며, 12시간 이내에는 반복 호출하지 않음
 - OVX 공개 CSV가 2열/다른 value 열 이름이어도 파서가 수치열을 탐색
